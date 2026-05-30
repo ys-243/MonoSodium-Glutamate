@@ -51,6 +51,13 @@ Fetch all the packages defined in the pubspec.yaml.
 flutter pub get
 ```
 
+...TBD
+
+## App Demo
+
+<video src="./readmephotos/Demonstration of PlanNUS.mov" controls width="100%"></video>
+
+
 ## How to use
 
 First, sign in using your NUS email and password.
@@ -59,4 +66,10 @@ First, sign in using your NUS email and password.
   <img src="./readmephotos/signin.png" width="250" title="Home Screen">
 </p>
 
+Once logged in, you will reach the home page.
 
+<p align="center">
+  <img src="./readmephotos/homepage.png" width="250" title="Home Screen">
+</p>
+
+### 1. Home Page
