@@ -4,6 +4,7 @@ import 'communities_page.dart';
 import 'events_page.dart';
 import 'profile_page.dart';
 import 'login_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -25,11 +26,16 @@ class _MainScreenState extends State<MainScreen> {
       const CommunitiesScreen(),
       const EventsScreen(),
       ProfileScreen(
-        onLogout: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const LoginScreen(),
-            ),
+        onLogout: () async {
+          // Tell Supabase to end the session
+          await Supabase.instance.client.auth.signOut(); 
+          
+          if (!mounted) return;
+
+          // Route back to the login screen and clear the navigation stack.
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
           );
         },
       ),
