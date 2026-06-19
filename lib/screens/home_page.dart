@@ -1,8 +1,4 @@
 import 'package:flutter/material.dart';
-import 'communities_page.dart';
-import 'events_page.dart';
-import 'forums_page.dart';
-import 'connect_page.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -73,10 +69,7 @@ class HomeScreen extends StatelessWidget {
                   'Join intimate, closed, or open communities tailored to your interests',
               color: Colors.blue,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CommunitiesScreen()),
-                );
+                // Navigate to communities screen
               },
             ),
             const SizedBox(height: 16),
@@ -88,10 +81,7 @@ class HomeScreen extends StatelessWidget {
                   'Discover campus events, create activities, and manage RSVPs',
               color: Colors.green,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const EventsScreen()),
-                );
+                // Navigate to events screen
               },
             ),
             const SizedBox(height: 16),
@@ -103,10 +93,7 @@ class HomeScreen extends StatelessWidget {
                   'Engage in meaningful conversations with the NUS community',
               color: Colors.purple,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ForumsScreen()),
-                );
+                // Navigate to forums screen
               },
             ),
             const SizedBox(height: 16),
@@ -118,10 +105,7 @@ class HomeScreen extends StatelessWidget {
                   'Build your network and stay connected with classmates',
               color: Colors.orange,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ConnectScreen()),
-                );
+                // Navigate to friends screen
               },
             ),
             const SizedBox(height: 32),
@@ -148,12 +132,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const CommunitiesScreen()),
-                        );
-                      },
+                      onPressed: () {},
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: 24,
@@ -164,12 +143,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const EventsScreen()),
-                        );
-                      },
+                      onPressed: () {},
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: 24,
@@ -194,11 +168,10 @@ class HomeScreen extends StatelessWidget {
     required String title,
     required String description,
     required Color color,
-    required VoidCallback onTap,
   }) {
     return Card(
       child: InkWell(
-        onTap: onTap,
+        onTap: () {},
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(20),
