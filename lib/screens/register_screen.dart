@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'profile_setup_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
 	const RegisterScreen({Key? key}) : super(key: key);
@@ -19,9 +20,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
 	@override
 	void dispose() {
-		_emailController.dispose();
-		_passwordController.dispose();
-		_confirmController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
 		super.dispose();
 	}
 
@@ -36,15 +37,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
 			);
 
 			// If signUp returns no error, show success message and pop.
+			if (!mounted) return;
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(content: Text('Account created successfully.')),
 			);
-			Navigator.pop(context);
+			Navigator.of(context).pushReplacement(
+				MaterialPageRoute(
+					builder: (_) => const ProfileSetupScreen(),
+				),
+			);
 		} on AuthException catch (e) {
+      // Show the error message from Supabase.
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(content: Text(e.message)),
 			);
 		} catch (e) {
+      // Show the other forms of error message.
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(content: Text(e.toString())),
 			);
@@ -71,6 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 								child: Column(
 									mainAxisSize: MainAxisSize.min,
 									children: [
+										const SizedBox(height: 12),
 										TextFormField(
 											controller: _emailController,
 											keyboardType: TextInputType.emailAddress,
@@ -99,6 +108,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 												if (value == null || value.isEmpty) {
 													return 'Password cannot be empty';
 												}
+                        // Enforce a minimum password length for better security.
 												if (value.length < 6) {
 													return 'Password should be at least 6 characters';
 												}
