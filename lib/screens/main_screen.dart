@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
-import 'communities_page.dart';
-import 'events_page.dart';
-import 'profile_page.dart';
-import 'login_page.dart';
+import 'home_screen.dart';
+import 'communities_screen.dart';
+import 'events_screen.dart';
+import 'profile_screen.dart';
+import 'login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainScreen extends StatefulWidget {

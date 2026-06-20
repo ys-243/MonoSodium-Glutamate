@@ -1,5 +1,5 @@
-import 'package:plannus/screens/main_page.dart'; 
-import 'package:plannus/screens/login_page.dart';
+import 'package:plannus/screens/main_screen.dart'; 
+import 'package:plannus/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

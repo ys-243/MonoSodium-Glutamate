@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'communities_page.dart';
-import 'events_page.dart';
-import 'forums_page.dart';
-import 'connect_page.dart';
+import 'package:plannus/screens/communities_screen.dart';
+import 'package:plannus/screens/events_screen.dart';
+import 'package:plannus/screens/forums_screen.dart';
+import 'package:plannus/screens/connect_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
