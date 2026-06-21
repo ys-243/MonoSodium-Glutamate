@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -9,15 +10,22 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+  
+  // State variables to hold the user's profile data and loading state
+  String _userEmail = '';
+  Map<String, dynamic>? _profileData;
+  bool _isLoadingProfile = true;
+
   late TabController _tabController;
   String _searchQuery = '';
 
   late final TextEditingController _nameController;
+  late final TextEditingController _schoolController;
   late final TextEditingController _majorController;
   late final TextEditingController _yearController;
 
+  // Change to Supabase data fetching in the future.
   final List<Map<String, String>> _friends = [
     {'name': 'Alice Tan', 'major': 'Computer Science', 'year': 'Year 3'},
     {'name': 'Bob Chen', 'major': 'Business Analytics', 'year': 'Year 2'},
@@ -26,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     {'name': 'Emma Koh', 'major': 'Law', 'year': 'Year 3'},
   ];
 
+  // This too.
   final List<Map<String, dynamic>> _personalEvents = [
     {
       'title': 'CS2103 Tutorial',
@@ -51,15 +60,82 @@ class _ProfileScreenState extends State<ProfileScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _nameController = TextEditingController(text: 'John Doe');
-    _majorController = TextEditingController(text: 'Computer Science');
-    _yearController = TextEditingController(text: 'Year 3');
+    
+    // Initialise controllers for the Settings tab
+    _nameController = TextEditingController();
+    _schoolController = TextEditingController();
+    _majorController = TextEditingController();
+    _yearController = TextEditingController();
+
+    // Trigger the database fetch
+    _fetchProfileData();
   }
+
+  // Fetch the user's profile data from Supabase and populate the state variables and controllers. 
+  Future<void> _fetchProfileData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Fetch the row from the profiles table
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (data == null) {
+        // If user really doesn't have a profile yet.
+        setState(() => _isLoadingProfile = false);
+        return;
+      }
+
+      // Once data found, 
+      if (mounted) {
+        // Update the state with the fetched profile data.
+        setState(() {
+          _profileData = data;
+          
+          // Populate the controllers for the Settings tab
+          _nameController.text = data['user_name'] ?? '';
+          _schoolController.text = data['school'] ?? '';
+          _majorController.text = data['major'] ?? '';
+          _yearController.text = data['year_of_study'] ?? '';
+          _userEmail = user.email ?? '';
+          
+          _isLoadingProfile = false;
+        });
+      }
+      //show error if fetching profile data fails
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingProfile = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading profile: $e')),
+        );
+      }
+    }
+  }
+
+// Function to get initials from the user's name for the avatar, used for the CircleAvatar in the Profile tab. If name not available, return '?'.
+String _getInitials() {
+  if (_profileData == null) return '?';
+  String firstName = _profileData!['first_name'] ?? '';
+  String lastName = _profileData!['last_name'] ?? '';
+    
+  if (firstName.isNotEmpty && lastName.isNotEmpty) {
+    return '${firstName[0]}${lastName[0]}'.toUpperCase();
+  } else if (firstName.isNotEmpty) {
+    return firstName[0].toUpperCase();
+  }
+  return '?';
+}
 
   @override
   void dispose() {
     _tabController.dispose();
     _nameController.dispose();
+    _schoolController.dispose();
     _majorController.dispose();
     _yearController.dispose();
     super.dispose();
@@ -85,34 +161,46 @@ class _ProfileScreenState extends State<ProfileScreen>
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 40,
-                  child: Text(
-                    'JD',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isLoadingProfile
+                      ? const CircularProgressIndicator()
+                      : Text(
+                          _getInitials(),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                        ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'John Doe',
-                        style: TextStyle(
+                      Text(
+                        _isLoadingProfile ? 'Loading...' : _profileData?['user_name'] ?? 'Unknown User',
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Computer Science, Year 3',
+                        _isLoadingProfile ? 'Loading...' : '${_profileData?['first_name'] ?? ''} ${_profileData?['last_name'] ?? ''}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isLoadingProfile 
+                            ? '...' 
+                            : '${_profileData?['school'] ?? ''} • ${_profileData?['major'] ?? ''}, ${_profileData?['year_of_study'] ?? ''}',
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       Text(
-                        'john.doe@u.nus.edu',
+                        _isLoadingProfile ? '...' : _profileData?['email'] ?? '',
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -308,37 +396,40 @@ class _ProfileScreenState extends State<ProfileScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Profile Settings',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Full Name'),
-                  controller: _nameController,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Major'),
-                  controller: _majorController,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Year of Study'),
-                  controller: _yearController,
-                ),
-              ],
-            ),
-          ),
-        ),
+        // Deprecated profile settings, might change to a seperate screen in the future.
+        
+        // const Text(
+        //   'Profile Settings',
+        //   style: TextStyle(
+        //     fontSize: 20,
+        //     fontWeight: FontWeight.bold,
+        //   ),
+        // ),
+        // const SizedBox(height: 16),
+        // Card(
+        //   child: Padding(
+        //     padding: const EdgeInsets.all(16),
+        //     child: Column(
+        //       children: [
+        //         TextField(
+        //           decoration: const InputDecoration(labelText: 'Full Name'),
+        //           controller: _nameController,
+        //         ),
+        //         const SizedBox(height: 16),
+        //         TextField(
+        //           decoration: const InputDecoration(labelText: 'Major'),
+        //           controller: _majorController,
+        //         ),
+        //         const SizedBox(height: 16),
+        //         TextField(
+        //           decoration: const InputDecoration(labelText: 'Year of Study'),
+        //           controller: _yearController,
+        //         ),
+        //       ],
+        //     ),
+        //   ),
+        // ),
+
         const SizedBox(height: 24),
         const Text(
           'App Preferences',
