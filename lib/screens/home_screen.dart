@@ -5,7 +5,8 @@ import 'package:plannus/screens/forums_screen.dart';
 import 'package:plannus/screens/connect_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final void Function(int) onTabSelected;
+  const HomeScreen({super.key, required this.onTabSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -73,10 +74,7 @@ class HomeScreen extends StatelessWidget {
                   'Join intimate, closed, or open communities tailored to your interests',
               color: Colors.blue,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CommunitiesScreen()),
-                );
+                onTabSelected(1); // Navigate to the Communities tab
               },
             ),
             const SizedBox(height: 16),
@@ -88,10 +86,7 @@ class HomeScreen extends StatelessWidget {
                   'Discover campus events, create activities, and manage RSVPs',
               color: Colors.green,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const EventsScreen()),
-                );
+                onTabSelected(2); // Navigate to the Events tab
               },
             ),
             const SizedBox(height: 16),
@@ -100,13 +95,10 @@ class HomeScreen extends StatelessWidget {
               icon: Icons.forum,
               title: 'Forums & Discussions',
               description:
-                  'Engage in meaningful conversations with the NUS community',
+                  'Engage in meaningful conversations with your community',
               color: Colors.purple,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ForumsScreen()),
-                );
+                onTabSelected(1); // Navigate to the communities tab.
               },
             ),
             const SizedBox(height: 16),
@@ -118,15 +110,12 @@ class HomeScreen extends StatelessWidget {
                   'Build your network and stay connected with classmates',
               color: Colors.orange,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ConnectScreen()),
-                );
+                onTabSelected(3); // Navigate to the Profile tab.
               },
             ),
             const SizedBox(height: 32),
             Card(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -149,10 +138,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 20),
                     FilledButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const CommunitiesScreen()),
-                        );
+                        onTabSelected(1); // Navigate to the Communities tab
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
@@ -165,10 +151,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const EventsScreen()),
-                        );
+                        onTabSelected(2); // Navigate to the Events tab
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
