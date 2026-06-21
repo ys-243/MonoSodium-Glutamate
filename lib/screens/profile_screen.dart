@@ -13,7 +13,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   
   // State variables to hold the user's profile data and loading state
-  String _userEmail = '';
   Map<String, dynamic>? _profileData;
   bool _isLoadingProfile = true;
 
@@ -101,7 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           _schoolController.text = data['school'] ?? '';
           _majorController.text = data['major'] ?? '';
           _yearController.text = data['year_of_study'] ?? '';
-          _userEmail = user.email ?? '';
           
           _isLoadingProfile = false;
         });
