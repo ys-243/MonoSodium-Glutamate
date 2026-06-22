@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/community.dart';
+import 'package:plannus/models/community.dart';
+import 'package:plannus/services/community_service.dart';
 import 'communities_details.dart';
 
 class CommunitiesScreen extends StatefulWidget {
@@ -9,72 +10,26 @@ class CommunitiesScreen extends StatefulWidget {
   State<CommunitiesScreen> createState() => _CommunitiesScreenState();
 }
 
-class _CommunitiesScreenState extends State<CommunitiesScreen>
-    with SingleTickerProviderStateMixin {
+class _CommunitiesScreenState extends State<CommunitiesScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
 
-  final List<Community> _communities = [
-    Community(
-      id: '1',
-      name: 'CS Study Group',
-      description: 'Private study group for CS2103 students',
-      level: CommunityLevel.intimate,
-      members: 8,
-      posts: 145,
-      isJoined: true,
-    ),
-    Community(
-      id: '2',
-      name: 'NUS Basketball Club',
-      description: 'Official basketball club - join us for training!',
-      level: CommunityLevel.closed,
-      members: 52,
-      posts: 328,
-      isJoined: true,
-    ),
-    Community(
-      id: '3',
-      name: 'NUS Freshmen 2026',
-      description: 'Welcome all freshmen to connect and share experiences',
-      level: CommunityLevel.open,
-      members: 1243,
-      posts: 5621,
-      isJoined: false,
-    ),
-    Community(
-      id: '4',
-      name: 'Close Friends Circle',
-      description: 'Personal space for close friends',
-      level: CommunityLevel.intimate,
-      members: 5,
-      posts: 892,
-      isJoined: true,
-    ),
-    Community(
-      id: '5',
-      name: 'Engineering Society',
-      description: 'For all engineering students - requires approval',
-      level: CommunityLevel.closed,
-      members: 234,
-      posts: 1456,
-      isJoined: false,
-    ),
-    Community(
-      id: '6',
-      name: 'NUS General Discussion',
-      description: 'Open forum for all NUS-related topics',
-      level: CommunityLevel.open,
-      members: 3421,
-      posts: 12453,
-      isJoined: true,
-    ),
-  ];
+  final CommunityService _communityService = CommunityService();
+  List<Community> _allCommunities = [];
+  bool _isLoading = true;
+
+  // For creating a new community
+  CommunityLevel _selectedLevel = CommunityLevel.open; // Default level for new communities
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    // Initial fetch of communities
+    _fetchCommunities();
   }
 
   @override
@@ -83,8 +38,28 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
     super.dispose();
   }
 
+  Future<void> _fetchCommunities() async {
+    setState(() => _isLoading = true);
+    try {
+      final communities = await _communityService.getCommunities();
+      if (mounted) {
+        setState(() {
+          _allCommunities = communities;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading communities: $e')),
+        );
+      }
+    }
+  }
+
   List<Community> _getFilteredCommunities() {
-    var filtered = _communities.where((community) {
+    var filtered = _allCommunities.where((community) {
       final matchesSearch = community.name
               .toLowerCase()
               .contains(_searchQuery.toLowerCase()) ||
@@ -132,12 +107,14 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
           onTap: (index) => setState(() {}),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              decoration: const InputDecoration(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator()) // show loading spinner while fetching
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    decoration: const InputDecoration(
                 hintText: 'Search communities...',
                 prefixIcon: Icon(Icons.search),
               ),
@@ -166,15 +143,18 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
   }
 
   Widget _buildCommunityList(List<Community> communities, {bool showLevelInfo = false, CommunityLevel? level}) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      children: [
-        if (showLevelInfo && level != null) ...[
-          _buildLevelInfoCard(level),
-          const SizedBox(height: 16),
+    return RefreshIndicator(
+      onRefresh: _fetchCommunities,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          if (showLevelInfo && level != null) ...[
+            _buildLevelInfoCard(level),
+            const SizedBox(height: 16),
+          ],
+          ...communities.map((community) => _buildCommunityCard(community)),
         ],
-        ...communities.map((community) => _buildCommunityCard(community)),
-      ],
+      ),
     );
   }
 
@@ -209,7 +189,7 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
     }
 
     return Card(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -350,8 +330,8 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
       avatar: Icon(icon, size: 16, color: color),
       label: Text(label, style: TextStyle(color: color, fontSize: 12)),
       visualDensity: VisualDensity.compact,
-      backgroundColor: color.withOpacity(0.1),
-      side: BorderSide(color: color.withOpacity(0.3)),
+      backgroundColor: color.withValues(alpha: 0.1),
+      side: BorderSide(color: color.withValues(alpha: 0.3)),
     );
   }
 
@@ -363,38 +343,28 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Community Name',
-              ),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Community Name'),
             ),
             const SizedBox(height: 16),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Description',
-              ),
+            TextField(
+              controller: _descController,
+              decoration: const InputDecoration(labelText: 'Description'),
               maxLines: 3,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<CommunityLevel>(
-              decoration: const InputDecoration(
-                labelText: 'Community Level',
-              ),
+              initialValue: _selectedLevel,
+              decoration: const InputDecoration(labelText: 'Community Level'),
               items: const [
-                DropdownMenuItem(
-                  value: CommunityLevel.intimate,
-                  child: Text('Intimate'),
-                ),
-                DropdownMenuItem(
-                  value: CommunityLevel.closed,
-                  child: Text('Closed'),
-                ),
-                DropdownMenuItem(
-                  value: CommunityLevel.open,
-                  child: Text('Open'),
-                ),
+                DropdownMenuItem(value: CommunityLevel.intimate, child: Text('Intimate')),
+                DropdownMenuItem(value: CommunityLevel.closed, child: Text('Closed')),
+                DropdownMenuItem(value: CommunityLevel.open, child: Text('Open')),
               ],
-              onChanged: (value) {},
+              onChanged: (value) {
+                if (value != null) setState(() => _selectedLevel = value);
+              },
             ),
           ],
         ),
@@ -404,7 +374,22 @@ class _CommunitiesScreenState extends State<CommunitiesScreen>
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              // Show a loading indicator in a real app, but for now:
+              await _communityService.createCommunity(
+                _nameController.text,
+                _descController.text,
+                _selectedLevel,
+              );
+              
+              _nameController.clear();
+              _descController.clear();
+              if (context.mounted) {
+                Navigator.pop(context);
+                _fetchCommunities(); // Refresh the screen to show the new data
+                setState(() {}); // Refresh the screen to show the new data
+              }
+            },
             child: const Text('Create'),
           ),
         ],

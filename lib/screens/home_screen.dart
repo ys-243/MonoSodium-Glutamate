@@ -1,8 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:plannus/screens/communities_screen.dart';
-import 'package:plannus/screens/events_screen.dart';
-import 'package:plannus/screens/forums_screen.dart';
-import 'package:plannus/screens/connect_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final void Function(int) onTabSelected;
@@ -49,7 +45,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 16),
             const Text(
-              'Welcome to PlanNUS',
+              'Welcome to PlanNUS!',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:plannus/screens/auth_page.dart';
+import 'package:plannus/services/auth_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +41,7 @@ class PlanNUSApp extends StatelessWidget {
           filled: true,
         ),
       ),
-      home: const AuthPage(), // Start with the AuthPage to handle authentication state. Allows us to show either HomeScreen or LoginScreen based on auth state.
+      home: const AuthService(), // Start with the AuthPage to handle authentication state. Allows us to show either HomeScreen or LoginScreen based on auth state.
     );
   }
 }

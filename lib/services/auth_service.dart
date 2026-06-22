@@ -4,8 +4,8 @@ import 'package:plannus/screens/login_screen.dart';
 import 'package:plannus/screens/main_screen.dart';
 import 'package:plannus/screens/profile_setup_screen.dart';
 
-class AuthPage extends StatelessWidget {
-  const AuthPage({Key? key}) : super(key: key);
+class AuthService extends StatelessWidget {
+  const AuthService({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

@@ -18,7 +18,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -28,7 +28,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.dispose();
   }
 
-  bool get _showModeration => widget.community.level != CommunityLevel.intimate;
+  bool get _canEdit => 
+    widget.community.currentUserRole == CommunityRole.owner || 
+    widget.community.currentUserRole == CommunityRole.admin;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +42,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           tabs: const [
             Tab(text: 'Discussions'),
             Tab(text: 'Events'),
+            Tab(text: 'Members'),
           ],
         ),
       ),
       body: Column(
         children: [
-          if (_showModeration)
+          if (_canEdit)
             Container(
               color: Colors.yellow.shade100,
               padding: const EdgeInsets.all(12),
@@ -84,6 +87,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               children: [
                 _buildDiscussionsTab(),
                 _buildEventsTab(),
+                _buildMembersTab(),
               ],
             ),
           ),
@@ -167,6 +171,19 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
   }
 
+  Widget _buildMembersTab() {
+    // TODO: Fetch and display the list of members from the supabase.
+    return Center(
+      child: Text(
+        'Members List Coming Soon!',
+        style: TextStyle(
+          fontSize: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ); 
+  }
+
   Widget _buildPostCard({
     required String author,
     required String content,
@@ -205,7 +222,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                     ],
                   ),
                 ),
-                if (_showModeration)
+                if (_canEdit)
                   IconButton(
                     icon: const Icon(Icons.flag, size: 20),
                     onPressed: () {},
