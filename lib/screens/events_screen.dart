@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/events.dart';
+import '../services/event_service.dart';
 
 class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key});
+  final String? communityId;
+  final String? communityName;
+  final bool showRegisteredOnly;
+
+  const EventsScreen({
+    super.key,
+    this.communityId,
+    this.communityName,
+    this.showRegisteredOnly = false,
+  });
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -12,70 +22,24 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  final EventService _eventService = EventService();
+
   String _searchQuery = '';
   String _selectedCategory = 'All';
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
 
-  final List<Event> _events = [
-    Event(
-      id: '1',
-      title: 'NUS Hackathon 2026',
-      date: DateTime(2026, 5, 20),
-      time: '9:00 AM - 9:00 PM',
-      location: 'i3 Building',
-      organizer: 'NUS Entrepreneurship Society',
-      attendees: 156,
-      capacity: 200,
-      category: 'Technology',
-      description: 'Annual hackathon for innovative solutions',
-      isRegistered: true,
-    ),
-    Event(
-      id: '2',
-      title: 'Basketball Tournament Finals',
-      date: DateTime(2026, 5, 18),
-      time: '6:00 PM - 8:00 PM',
-      location: 'MPSH 1',
-      organizer: 'NUS Basketball Club',
-      attendees: 89,
-      capacity: 150,
-      category: 'Sports',
-      description: 'Watch the finals of the inter-faculty basketball tournament',
-      isRegistered: false,
-    ),
-    Event(
-      id: '3',
-      title: 'Career Fair 2026',
-      date: DateTime(2026, 5, 25),
-      time: '10:00 AM - 5:00 PM',
-      location: 'University Town',
-      organizer: 'NUS Career Centre',
-      attendees: 432,
-      capacity: 500,
-      category: 'Career',
-      description: 'Meet top employers and explore career opportunities',
-      isRegistered: true,
-    ),
-    Event(
-      id: '4',
-      title: 'Introduction to AI Workshop',
-      date: DateTime(2026, 5, 16),
-      time: '2:00 PM - 5:00 PM',
-      location: 'COM1-0210',
-      organizer: 'CS Study Group',
-      attendees: 25,
-      capacity: 30,
-      category: 'Academic',
-      description: 'Learn the fundamentals of artificial intelligence',
-      isRegistered: false,
-    ),
-  ];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  List<Event> _events = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadEvents();
   }
 
   @override
@@ -84,23 +48,112 @@ class _EventsScreenState extends State<EventsScreen>
     super.dispose();
   }
 
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      late final List<Event> events;
+
+      if (widget.showRegisteredOnly) {
+        events = await _eventService.fetchRegisteredEventsForCurrentUser();
+      } else {
+        if (widget.communityId == null) {
+          throw Exception('Missing communityId for community events screen');
+        }
+
+        events = await _eventService.fetchCommunityEvents(widget.communityId!);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _events = events;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleRsvp(Event event) async {
+    try {
+      await _eventService.rsvpToEvent(event.id);
+      await _loadEvents();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Registered for ${event.title}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to RSVP: $error'),
+        ),
+      );
+    }
+  }
+
   List<Event> _getFilteredEvents() {
     return _events.where((event) {
-      final matchesSearch = event.title
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
-          event.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch =
+          event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              event.description
+                  .toLowerCase()
+                  .contains(_searchQuery.toLowerCase());
+
       final matchesCategory =
           _selectedCategory == 'All' || event.category == _selectedCategory;
+
       return matchesSearch && matchesCategory;
     }).toList();
   }
 
+  List<Event> _getEventsOnSelectedDate() {
+    return _events
+        .where(
+          (event) =>
+              event.date.year == _selectedDate.year &&
+              event.date.month == _selectedDate.month &&
+              event.date.day == _selectedDate.day,
+        )
+        .toList();
+  }
+
+  List<Event> _getEventsForDay(DateTime day) {
+    return _events
+        .where(
+          (event) =>
+              event.date.year == day.year &&
+              event.date.month == day.month &&
+              event.date.day == day.day,
+        )
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filteredEvents = _getFilteredEvents();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Events & Activities'),
+        title: Text(
+          widget.showRegisteredOnly
+              ? 'My Events'
+              : '${widget.communityName} Events',
+),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -146,28 +199,73 @@ class _EventsScreenState extends State<EventsScreen>
                     'Sports',
                     'Career',
                     'Academic',
-                    'Social'
+                    'Social',
                   ]
-                      .map((category) => PopupMenuItem(
-                            value: category,
-                            child: Text(category),
-                          ))
+                      .map(
+                        (category) => PopupMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
                       .toList(),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildEventsList(_getFilteredEvents()),
-                _buildEventsList(
-                    _getFilteredEvents().where((e) => e.isRegistered).toList()),
-                _buildCalendarView(),
-              ],
-            ),
+            child: _buildBody(filteredEvents),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(List<Event> filteredEvents) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to load events',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loadEvents,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadEvents,
+      child: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildEventsList(filteredEvents),
+          _buildEventsList(
+            filteredEvents.where((event) => event.isRegistered).toList(),
+          ),
+          _buildCalendarView(),
         ],
       ),
     );
@@ -175,19 +273,30 @@ class _EventsScreenState extends State<EventsScreen>
 
   Widget _buildEventsList(List<Event> events) {
     if (events.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.calendar_today,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return ListView(
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.5,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.showRegisteredOnly
+                      ? 'You have not registered for any events yet'
+                      : 'No events found',
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            const Text('No events found'),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -199,6 +308,8 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Widget _buildEventCard(Event event) {
+    final isFull = event.capacity > 0 && event.attendees >= event.capacity;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -228,15 +339,21 @@ class _EventsScreenState extends State<EventsScreen>
               ),
             ),
             const SizedBox(height: 12),
-            _buildEventInfo(Icons.calendar_today,
-                '${event.date.day}/${event.date.month}/${event.date.year}'),
+            _buildEventInfo(
+              Icons.calendar_today,
+              '${event.date.day}/${event.date.month}/${event.date.year}',
+            ),
             const SizedBox(height: 4),
             _buildEventInfo(Icons.access_time, event.time),
             const SizedBox(height: 4),
             _buildEventInfo(Icons.location_on, event.location),
             const SizedBox(height: 4),
-            _buildEventInfo(Icons.people,
-                '${event.attendees} / ${event.capacity} attending'),
+            _buildEventInfo(
+              Icons.people,
+              event.capacity > 0
+                  ? '${event.attendees} / ${event.capacity} attending'
+                  : '${event.attendees} attending',
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -252,15 +369,21 @@ class _EventsScreenState extends State<EventsScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                event.isRegistered
-                    ? const OutlinedButton(
-                        onPressed: null,
-                        child: Text('Registered'),
-                      )
-                    : FilledButton(
-                        onPressed: () {},
-                        child: const Text('RSVP'),
-                      ),
+                if (event.isRegistered)
+                  const OutlinedButton(
+                    onPressed: null,
+                    child: Text('Registered'),
+                  )
+                else if (isFull)
+                  const OutlinedButton(
+                    onPressed: null,
+                    child: Text('Full'),
+                  )
+                else
+                  FilledButton(
+                    onPressed: () => _handleRsvp(event),
+                    child: const Text('RSVP'),
+                  ),
               ],
             ),
           ],
@@ -278,11 +401,13 @@ class _EventsScreenState extends State<EventsScreen>
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: 8),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 14,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ],
@@ -291,6 +416,7 @@ class _EventsScreenState extends State<EventsScreen>
 
   Widget _buildCategoryChip(String category) {
     Color color;
+
     switch (category) {
       case 'Technology':
         color = Colors.blue;
@@ -312,20 +438,23 @@ class _EventsScreenState extends State<EventsScreen>
     }
 
     return Chip(
-      label: Text(category, style: TextStyle(color: color, fontSize: 12)),
+      label: Text(
+        category,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+        ),
+      ),
       visualDensity: VisualDensity.compact,
-      backgroundColor: color.withOpacity(0.1),
-      side: BorderSide(color: color.withOpacity(0.3)),
+      backgroundColor: color.withValues(alpha: 0.1),
+      side: BorderSide(
+        color: color.withValues(alpha: 0.3),
+      ),
     );
   }
 
   Widget _buildCalendarView() {
-    final eventsOnSelectedDate = _events
-        .where((event) =>
-            event.date.year == _selectedDate.year &&
-            event.date.month == _selectedDate.month &&
-            event.date.day == _selectedDate.day)
-        .toList();
+    final eventsOnSelectedDate = _getEventsOnSelectedDate();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -333,11 +462,12 @@ class _EventsScreenState extends State<EventsScreen>
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: TableCalendar(
+            child: TableCalendar<Event>(
               firstDay: DateTime.utc(2020, 1, 1),
               lastDay: DateTime.utc(2030, 12, 31),
               focusedDay: _focusedDay,
               selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+              eventLoader: _getEventsForDay,
               onDaySelected: (selectedDay, focusedDay) {
                 setState(() {
                   _selectedDate = selectedDay;

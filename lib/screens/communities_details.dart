@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:plannus/models/community.dart';
+import '../models/community.dart';
+import '../models/events.dart';
+import '../services/event_service.dart';
 
 class CommunityDetailScreen extends StatefulWidget {
   final Community community;
@@ -13,18 +15,38 @@ class CommunityDetailScreen extends StatefulWidget {
 class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
   final TextEditingController _postController = TextEditingController();
+  final TextEditingController _eventTitleController = TextEditingController();
+  final TextEditingController _eventDateController = TextEditingController();
+  final TextEditingController _eventTimeController = TextEditingController();
+  final TextEditingController _eventEndTimeController = TextEditingController();
+  final TextEditingController _eventLocationController = TextEditingController();
+  final TextEditingController _eventDescriptionController = TextEditingController();
+
+  final EventService _eventService = EventService();
+
+  List<Event> _events = [];
+  bool _isLoadingEvents = true;
+  String? _eventsError;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadEvents();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _postController.dispose();
+    _eventTitleController.dispose();
+    _eventDateController.dispose();
+    _eventTimeController.dispose();
+    _eventEndTimeController.dispose();
+    _eventLocationController.dispose();
+    _eventDescriptionController.dispose();
     super.dispose();
   }
 
@@ -172,7 +194,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Widget _buildMembersTab() {
-    // TODO: Fetch and display the list of members from the supabase.
+    // Fetch and display the list of members from the supabase.
     return Center(
       child: Text(
         'Members List Coming Soon!',
@@ -242,59 +264,121 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
   }
 
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isLoadingEvents = true;
+      _eventsError = null;
+    });
+
+    try {
+      final events = await _eventService.fetchCommunityEvents(
+        widget.community.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _events = events;
+        _isLoadingEvents = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _eventsError = error.toString();
+        _isLoadingEvents = false;
+      });
+    }
+  }
+
   Widget _buildEventsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Community Events',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+    if (_isLoadingEvents) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_eventsError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to load events',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _eventsError!,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loadEvents,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadEvents,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Community Events',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              FilledButton.icon(
+                onPressed: _showCreateEventDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Create'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (_events.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text('No events yet.'),
+              ),
+            )
+          else
+            ..._events.map(
+              (event) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildEventCard(event),
+              ),
             ),
-            FilledButton.icon(
-              onPressed: _showCreateEventDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Create'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildEventCard(
-          title: 'Study Session - Midterm Prep',
-          date: DateTime(2026, 5, 15),
-          time: '2:00 PM',
-          location: 'Central Library Level 5',
-          attendees: 6,
-        ),
-        const SizedBox(height: 12),
-        _buildEventCard(
-          title: 'Group Project Meeting',
-          date: DateTime(2026, 5, 18),
-          time: '4:00 PM',
-          location: 'COM1 Study Room 3',
-          attendees: 4,
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildEventCard({
-    required String title,
-    required DateTime date,
-    required String time,
-    required String location,
-    required int attendees,
-  }) {
+  Widget _buildEventCard(Event event) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -311,14 +395,14 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _getMonthName(date.month),
+                    _getMonthName(event.date.month),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 12,
                     ),
                   ),
                   Text(
-                    '${date.day}',
+                    '${event.date.day}',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 20,
@@ -334,7 +418,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    event.title,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -350,7 +434,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        time,
+                        event.time,
                         style: TextStyle(
                           fontSize: 14,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -360,7 +444,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    location,
+                    event.location,
                     style: TextStyle(
                       fontSize: 14,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -368,7 +452,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '$attendees attending',
+                    '${event.attendees} attending',
                     style: TextStyle(
                       fontSize: 14,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -377,10 +461,18 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 ],
               ),
             ),
-            FilledButton(
-              onPressed: () {},
-              child: const Text('RSVP'),
-            ),
+            event.isRegistered
+                ? const OutlinedButton(
+                    onPressed: null,
+                    child: Text('Registered'),
+                  )
+                : FilledButton(
+                    onPressed: () async {
+                      await _eventService.rsvpToEvent(event.id);
+                      await _loadEvents();
+                    },
+                    child: const Text('RSVP'),
+                  ),
           ],
         ),
       ),
@@ -406,32 +498,58 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   void _showCreateEventDialog() {
+    _eventTitleController.clear();
+    _eventDateController.clear();
+    _eventTimeController.clear();
+    _eventEndTimeController.clear();
+    _eventLocationController.clear();
+    _eventDescriptionController.clear();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Create Event'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const TextField(
-                decoration: InputDecoration(labelText: 'Event Title'),
+              TextField(
+                controller: _eventTitleController,
+                decoration: const InputDecoration(labelText: 'Event Title'),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Date'),
+              TextField(
+                controller: _eventDateController,
+                decoration: const InputDecoration(
+                  labelText: 'Date',
+                  hintText: 'YYYY-MM-DD',
+                ),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Time'),
+              TextField(
+                controller: _eventTimeController,
+                decoration: const InputDecoration(
+                  labelText: 'Time',
+                  hintText: 'HH:MM',
+                ),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Location'),
+              TextField(
+                controller: _eventEndTimeController,
+                decoration: const InputDecoration(
+                  labelText: 'End Time',
+                  hintText: 'HH:MM',
+                ),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Description'),
+              TextField(
+                controller: _eventLocationController,
+                decoration: const InputDecoration(labelText: 'Location'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _eventDescriptionController,
+                decoration: const InputDecoration(labelText: 'Description'),
                 maxLines: 3,
               ),
             ],
@@ -439,15 +557,136 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _createEvent,
             child: const Text('Create'),
           ),
         ],
       ),
     );
+  }
+
+  TimeOfDay? _parseTime(String timeText) {
+    final parts = timeText.split(':');
+
+    if (parts.length != 2) {
+      return null;
+    }
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+
+    if (hour == null || minute == null) {
+      return null;
+    }
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return null;
+    }
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+  
+  Future<void> _createEvent() async {
+    final title = _eventTitleController.text.trim();
+    final dateText = _eventDateController.text.trim();
+    final startTimeText = _eventTimeController.text.trim();
+    final endTimeText = _eventEndTimeController.text.trim();
+    final location = _eventLocationController.text.trim();
+    final description = _eventDescriptionController.text.trim();
+
+    if (title.isEmpty ||
+        dateText.isEmpty ||
+        startTimeText.isEmpty ||
+        endTimeText.isEmpty ||
+        location.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in title, date, start time, end time, and location.'),
+        ),
+      );
+      return;
+    }
+
+    final parsedDate = DateTime.tryParse(dateText);
+
+    if (parsedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the date in YYYY-MM-DD format.'),
+        ),
+      );
+      return;
+    }
+
+    final startTime = _parseTime(startTimeText);
+    final endTime = _parseTime(endTimeText);
+
+    if (startTime == null || endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter time in HH:MM format.'),
+        ),
+      );
+      return;
+    }
+
+    final startDateTime = DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      startTime.hour,
+      startTime.minute,
+    );
+
+    final endDateTime = DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      endTime.hour,
+      endTime.minute,
+    );
+
+    if (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('End time must be after start time.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _eventService.createEvent(
+        communityId: widget.community.id,
+        title: title,
+        date: parsedDate,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        location: location,
+        description: description,
+        category: 'General',
+        capacity: 0,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event created successfully.')),
+      );
+
+      await _loadEvents();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create event: $error')),
+      );
+    }
   }
 }

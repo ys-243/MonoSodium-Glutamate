@@ -33,7 +33,9 @@ class _MainScreenState extends State<MainScreen> {
         },
       ),
       const CommunitiesScreen(),
-      const EventsScreen(),
+      const EventsScreen(
+        showRegisteredOnly: true,
+      ),
       ProfileScreen(
         onLogout: () async {
           await Supabase.instance.client.auth.signOut();

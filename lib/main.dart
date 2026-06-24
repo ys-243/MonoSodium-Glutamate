@@ -6,11 +6,25 @@ import 'package:plannus/services/auth_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await dotenv.load(fileName: '.env');
+  
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseKey = dotenv.env['SUPABASE_PUBLISHABLE_KEY'];
+
+  if (supabaseUrl == null || supabaseUrl.isEmpty) {
+    throw Exception('Supabase URL is not set in the .env file.');
+  }
+
+  if (supabaseKey == null || supabaseKey.isEmpty) {
+    throw Exception('Supabase Publishable Key is not set in the .env file.');
+  }
+
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    publishableKey: dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ?? '',
+    url: supabaseUrl,
+    publishableKey: supabaseKey,
   );
+  
   runApp(const ProviderScope(child: PlanNUSApp()));
 }
 
