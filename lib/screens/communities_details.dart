@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/community.dart';
+import 'package:plannus/models/community.dart';
 
 class CommunityDetailScreen extends StatefulWidget {
   final Community community;

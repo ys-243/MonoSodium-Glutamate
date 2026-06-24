@@ -386,7 +386,7 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> with SingleTicker
               _descController.clear();
               if (context.mounted) {
                 Navigator.pop(context);
-                _fetchCommunities(); // Refresh the screen to show the new data
+                _fetchCommunities();
                 setState(() {}); // Refresh the screen to show the new data
               }
             },
