@@ -72,4 +72,40 @@ class CommunityService {
     // will automatically delete all associated member rows.
     await _supabase.from('communities').delete().eq('id', communityId);
   }
+
+  // Fetches all members of a community along with their roles.
+  Future<List<Map<String, String>>> fetchCommunityMembers(String communityId) async {
+    final response = await _supabase
+        .from('community_members')
+        .select('''
+          role,
+          profiles (
+            first_name,
+            last_name,
+            user_name
+          )
+        ''')
+        .eq('community_id', communityId)
+        .order('role', ascending: true); // Optional: Puts admins/owners near the top
+
+    return (response as List).map((row) {
+      final profile = row['profiles'] as Map<String, dynamic>?;
+      final role = row['role'] as String? ?? 'member';
+      
+      if (profile == null) return {'name': 'Unknown User', 'role': role};
+
+      final userName = profile['user_name'] as String?;
+      final firstName = profile['first_name'] as String? ?? '';
+      final lastName = profile['last_name'] as String? ?? '';
+
+      final displayName = (userName != null && userName.isNotEmpty)
+          ? userName
+          : '$firstName $lastName'.trim();
+
+      return {
+        'name': displayName.isNotEmpty ? displayName : 'Unknown User',
+        'role': role,
+      };
+    }).toList();
+  }
 }

@@ -4,6 +4,52 @@ import '../models/events.dart';
 class EventService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  Future<void> createEvent({
+    required String communityId,
+    required String title,
+    required DateTime date,
+    required DateTime startTime,
+    required DateTime endTime,
+    required String location,
+    required String description,
+    required String category,
+    required int capacity,
+  }) async {
+    final user = _supabase.auth.currentUser;
+
+    if (user == null) {
+      throw Exception('You must be logged in to create an event.');
+    }
+
+    final insertedEvent = await _supabase
+        .from('events')
+        .insert({
+          'community_id': communityId,
+          'title': title,
+          'date': date.toIso8601String(),
+          'start_time': startTime.toIso8601String(),
+          'end_time': endTime.toIso8601String(),
+          'location': location,
+          'description': description,
+          'category': category,
+          'capacity': capacity,
+          'created_by': user.id,
+        })
+        .select('id')
+        .single();
+
+    final eventId = insertedEvent['id'] as String;
+
+    await _supabase.from('event_attendees').upsert(
+      {
+        'event_id': eventId,
+        'user_id': user.id,
+        'status': 'registered',
+      },
+      onConflict: 'event_id,user_id',
+    );
+  }
+
   Future<List<Event>> fetchCommunityEvents(String communityId) async {
     final currentUser = _supabase.auth.currentUser;
 
@@ -53,50 +99,36 @@ class EventService {
     }).toList();
   }
 
-  Future<void> createEvent({
-    required String communityId,
-    required String title,
-    required DateTime date,
-    required DateTime startTime,
-    required DateTime endTime,
-    required String location,
-    required String description,
-    required String category,
-    required int capacity,
-  }) async {
-    final user = _supabase.auth.currentUser;
+  // Fetches a list of attendee names for a specific event
+  Future<List<Map<String, String>>> fetchEventAttendees(String eventId) async {
+    final response = await _supabase
+        .from('event_attendees')
+        .select('''
+          user_id,
+          profiles (
+            first_name,
+            last_name,
+            user_name
+          )
+        ''')
+        .eq('event_id', eventId)
+        .eq('status', 'registered');
 
-    if (user == null) {
-      throw Exception('You must be logged in to create an event.');
-    }
+    return (response as List).map((row) {
+      final profile = row['profiles'] as Map<String, dynamic>?;
+      if (profile == null) return {'name': 'Unknown User'};
 
-    final insertedEvent = await _supabase
-        .from('events')
-        .insert({
-          'community_id': communityId,
-          'title': title,
-          'date': date.toIso8601String(),
-          'start_time': startTime.toIso8601String(),
-          'end_time': endTime.toIso8601String(),
-          'location': location,
-          'description': description,
-          'category': category,
-          'capacity': capacity,
-          'created_by': user.id,
-        })
-        .select('id')
-        .single();
+      final userName = profile['user_name'] as String?;
+      final firstName = profile['first_name'] as String? ?? '';
+      final lastName = profile['last_name'] as String? ?? '';
 
-    final eventId = insertedEvent['id'] as String;
+      // Prefer user_name, fallback to first + last name
+      final displayName = (userName != null && userName.isNotEmpty)
+          ? userName
+          : '$firstName $lastName'.trim();
 
-    await _supabase.from('event_attendees').upsert(
-      {
-        'event_id': eventId,
-        'user_id': user.id,
-        'status': 'registered',
-      },
-      onConflict: 'event_id,user_id',
-    );
+      return {'name': displayName.isNotEmpty ? displayName : 'Unknown User'};
+    }).toList();
   }
 
   Future<void> rsvpToEvent(String eventId) async {

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import '../models/community.dart';
-import '../models/events.dart';
-import '../services/event_service.dart';
+import 'package:plannus/models/community.dart';
+import 'package:plannus/services/community_service.dart';
+import 'package:plannus/models/events.dart';
+import 'package:plannus/services/event_service.dart';
+
 
 class CommunityDetailScreen extends StatefulWidget {
   final Community community;
@@ -25,6 +27,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   final TextEditingController _eventDescriptionController = TextEditingController();
 
   final EventService _eventService = EventService();
+  final CommunityService _communityService = CommunityService();
 
   // State variables for events
   List<Event> _events = [];
@@ -35,11 +38,17 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   bool _isCreating = false;
   String? _dialogError;
 
+  // State variables for members
+  List<Map<String, String>> _members = [];
+  bool _isLoadingMembers = true;
+  String? _membersError;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadEvents();
+    _loadEvents(); 
+    _loadMembers(); 
   }
 
   @override
@@ -199,16 +208,64 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Widget _buildMembersTab() {
-    // Fetch and display the list of members from the supabase.
-    return Center(
-      child: Text(
-        'Members List Coming Soon!',
-        style: TextStyle(
-          fontSize: 16,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+    if (_isLoadingMembers) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_membersError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Error: $_membersError'),
+            TextButton(
+              onPressed: _loadMembers,
+              child: const Text('Retry'),
+            ),
+          ],
         ),
+      );
+    }
+
+    if (_members.isEmpty) {
+      return const Center(child: Text('No members found.'));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadMembers,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _members.length,
+        itemBuilder: (context, index) {
+          final member = _members[index];
+          final name = member['name']!;
+          final role = member['role']!;
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                child: Text(
+                  name[0].toUpperCase(),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                ),
+              ),
+              title: Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(role.toUpperCase()),
+              trailing: role == 'owner' || role == 'admin' 
+                  ? Icon(Icons.shield, color: Theme.of(context).colorScheme.primary, size: 20) 
+                  : null,
+            ),
+          );
+        },
       ),
-    ); 
+    );
   }
 
   Widget _buildPostCard({
@@ -292,6 +349,29 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
       setState(() {
         _eventsError = error.toString();
         _isLoadingEvents = false;
+      });
+    }
+  }
+
+  Future<void> _loadMembers() async {
+    setState(() {
+      _isLoadingMembers = true;
+      _membersError = null;
+    });
+
+    try {
+      final members = await _communityService.fetchCommunityMembers(widget.community.id);
+
+      if (!mounted) return;
+      setState(() {
+        _members = members;
+        _isLoadingMembers = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _membersError = error.toString();
+        _isLoadingMembers = false;
       });
     }
   }
@@ -385,102 +465,207 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   Widget _buildEventCard(Event event) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _getMonthName(event.date.month),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    '${event.date.day}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showEventDetailsDialog(event),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _getMonthName(event.date.month),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontSize: 12,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        event.time,
-                        style: TextStyle(
-                          fontSize: 14,
+                    ),
+                    Text(
+                      '${event.date.day}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
+                        const SizedBox(width: 4),
+                        Text(
+                          event.time,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      event.location,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    event.location,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${event.attendees} attending',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 2),
+                    Text(
+                      '${event.attendees} attending',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            event.isRegistered
-                ? const OutlinedButton(
-                    onPressed: null,
-                    child: Text('Registered'),
-                  )
-                : FilledButton(
-                    onPressed: () async {
-                      await _eventService.rsvpToEvent(event.id);
-                      await _loadEvents();
-                    },
-                    child: const Text('RSVP'),
-                  ),
-          ],
+              event.isRegistered
+                  ? const OutlinedButton(
+                      onPressed: null,
+                      child: Text('Registered'),
+                    )
+                  : FilledButton(
+                      onPressed: () async {
+                        await _eventService.rsvpToEvent(event.id);
+                        await _loadEvents();
+                      },
+                      child: const Text('RSVP'),
+                    ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  void _showEventDetailsDialog(Event event) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(event.title),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min, // Shrinks to fit content
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Event Description ---
+                const Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  event.description.isNotEmpty 
+                      ? event.description 
+                      : 'No description provided.',
+                ),
+                const SizedBox(height: 24),
+
+                // --- Attendees Header ---
+                Row(
+                  children: [
+                    const Icon(Icons.people, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Attendees (${event.attendees})',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                const Divider(),
+
+                // --- Dynamic Attendees List ---
+                Flexible(
+                  child: FutureBuilder<List<Map<String, String>>>(
+                    future: _eventService.fetchEventAttendees(event.id),
+                    builder: (context, snapshot) {
+                      // Loading State
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      
+                      // if error
+                      if (snapshot.hasError) {
+                        return Text('Error loading attendees: ${snapshot.error}');
+                      }
+
+                      // Success State
+                      final attendees = snapshot.data ?? [];
+                      if (attendees.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text('No one has registered yet. Be the first!'),
+                        );
+                      }
+
+                      // Build the list of avatars and names
+                      return ListView.builder(
+                        shrinkWrap: true, // Crucial for using ListView inside Dialog
+                        itemCount: attendees.length,
+                        itemBuilder: (context, index) {
+                          final name = attendees[index]['name']!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              child: Text(
+                                name[0].toUpperCase(),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                              ),
+                            ),
+                            title: Text(name),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
