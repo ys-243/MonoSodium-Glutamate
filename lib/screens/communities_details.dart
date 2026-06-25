@@ -26,9 +26,14 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   final EventService _eventService = EventService();
 
+  // State variables for events
   List<Event> _events = [];
   bool _isLoadingEvents = true;
   String? _eventsError;
+
+  // State variables for event creation dialog
+  bool _isCreating = false;
+  String? _dialogError;
 
   @override
   void initState() {
@@ -497,78 +502,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     return months[month - 1];
   }
 
-  void _showCreateEventDialog() {
-    _eventTitleController.clear();
-    _eventDateController.clear();
-    _eventTimeController.clear();
-    _eventEndTimeController.clear();
-    _eventLocationController.clear();
-    _eventDescriptionController.clear();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create Event'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _eventTitleController,
-                decoration: const InputDecoration(labelText: 'Event Title'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _eventDateController,
-                decoration: const InputDecoration(
-                  labelText: 'Date',
-                  hintText: 'YYYY-MM-DD',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _eventTimeController,
-                decoration: const InputDecoration(
-                  labelText: 'Time',
-                  hintText: 'HH:MM',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _eventEndTimeController,
-                decoration: const InputDecoration(
-                  labelText: 'End Time',
-                  hintText: 'HH:MM',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _eventLocationController,
-                decoration: const InputDecoration(labelText: 'Location'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _eventDescriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: _createEvent,
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-  }
-
   TimeOfDay? _parseTime(String timeText) {
     final parts = timeText.split(':');
 
@@ -589,104 +522,278 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
     return TimeOfDay(hour: hour, minute: minute);
   }
+
+  void _showCreateEventDialog() {
+    // Clear controllers when opening a fresh dialog
+    _eventTitleController.clear();
+    _eventDateController.clear();
+    _eventTimeController.clear();
+    _eventEndTimeController.clear();
+    _eventLocationController.clear();
+    _eventDescriptionController.clear();
+
+    // Reset the dialog state variables
+    _dialogError = null;
+    _isCreating = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevents accidental dismissal while loading
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          return AlertDialog(
+            title: const Text('Create Event'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // error message display
+                  if (_dialogError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _dialogError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // --- FORM FIELDS ---
+                  TextField(
+                    controller: _eventTitleController,
+                    decoration: const InputDecoration(labelText: 'Event Title'),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Date Picker
+                  TextField(
+                    controller: _eventDateController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      hintText: 'DD-MM-YYYY',
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    onTap: () async {
+                      final DateTime? pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(), 
+                        lastDate: DateTime(2100),
+                      );
+
+                      if (pickedDate != null) {
+                        final String day = pickedDate.day.toString().padLeft(2, '0');
+                        final String month = pickedDate.month.toString().padLeft(2, '0');
+                        final String year = pickedDate.year.toString();
+                        _eventDateController.text = '$day-$month-$year';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Start Time Picker
+                  TextField(
+                    controller: _eventTimeController,
+                    readOnly: true, // Prevents keyboard from showing up
+                    decoration: const InputDecoration(
+                      labelText: 'Start Time',
+                      hintText: 'HH:MM',
+                      suffixIcon: Icon(Icons.access_time),
+                    ),
+                    onTap: () async {
+                      final TimeOfDay? pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                      );
+                      if (pickedTime != null) {
+                        final String hour = pickedTime.hour.toString().padLeft(2, '0');
+                        final String minute = pickedTime.minute.toString().padLeft(2, '0');
+                        _eventTimeController.text = '$hour:$minute';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // End Time Picker
+                  TextField(
+                    controller: _eventEndTimeController,
+                    readOnly: true, // Prevents keyboard from showing up
+                    decoration: const InputDecoration(
+                      labelText: 'End Time',
+                      hintText: 'HH:MM',
+                      suffixIcon: Icon(Icons.access_time_filled),
+                    ),
+                    onTap: () async {
+                      TimeOfDay initialEndTime = TimeOfDay.now();
+                      if (_eventTimeController.text.isNotEmpty) {
+                        final parts = _eventTimeController.text.split(':');
+                        if (parts.length == 2) {
+                           initialEndTime = TimeOfDay(
+                             hour: int.tryParse(parts[0]) ?? initialEndTime.hour, 
+                             minute: int.tryParse(parts[1]) ?? initialEndTime.minute
+                           );
+                        }
+                      }
+                      final TimeOfDay? pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: initialEndTime,
+                      );
+                      if (pickedTime != null) {
+                        final String hour = pickedTime.hour.toString().padLeft(2, '0');
+                        final String minute = pickedTime.minute.toString().padLeft(2, '0');
+                        _eventEndTimeController.text = '$hour:$minute';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _eventLocationController,
+                    decoration: const InputDecoration(labelText: 'Location'),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  TextField(
+                    controller: _eventDescriptionController,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+            
+            // --- ACTIONS ---
+            actions: [
+              TextButton(
+                onPressed: _isCreating ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                // Disable button while creating to prevent multiple submissions
+                onPressed: _isCreating ? null : () => _handleEventSubmission(setDialogState), // pass info to event submission function.
+                child: _isCreating 
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Create'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
   
-  Future<void> _createEvent() async {
-    final title = _eventTitleController.text.trim();
-    final dateText = _eventDateController.text.trim();
-    final startTimeText = _eventTimeController.text.trim();
-    final endTimeText = _eventEndTimeController.text.trim();
-    final location = _eventLocationController.text.trim();
-    final description = _eventDescriptionController.text.trim();
-
-    if (title.isEmpty ||
-        dateText.isEmpty ||
-        startTimeText.isEmpty ||
-        endTimeText.isEmpty ||
-        location.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill in title, date, start time, end time, and location.'),
-        ),
-      );
+  Future<void> _handleEventSubmission(StateSetter setDialogState) async {
+    // We check for any errors in the submission
+    
+    // 1. Empty field check
+    if (_eventTitleController.text.isEmpty || 
+        _eventDateController.text.isEmpty ||
+        _eventTimeController.text.isEmpty ||
+        _eventEndTimeController.text.isEmpty ||
+        _eventLocationController.text.isEmpty) {
+      setDialogState(() => _dialogError = 'Please fill in all required fields.');
       return;
     }
 
-    final parsedDate = DateTime.tryParse(dateText);
+    // 2. Date Validation: Date must be in the future and in correct format (DD-MM-YYYY)
+    final dateParts = _eventDateController.text.split('-');
+    DateTime? parsedDate;
+    if (dateParts.length == 3) {
+      final day = int.tryParse(dateParts[0]);
+      final month = int.tryParse(dateParts[1]);
+      final year = int.tryParse(dateParts[2]);
+      
+      if (day != null && month != null && year != null) {
+        parsedDate = DateTime(year, month, day);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
 
+        if (parsedDate.isBefore(today)) {
+          setDialogState(() => _dialogError = 'Event date cannot be in the past.');
+          return;
+        }
+      }
+    }
+    
     if (parsedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the date in YYYY-MM-DD format.'),
-        ),
-      );
-      return;
+       setDialogState(() => _dialogError = 'Invalid date format.');
+       return;
     }
 
-    final startTime = _parseTime(startTimeText);
-    final endTime = _parseTime(endTimeText);
+    // 3. Time Validation: End time must be after start time and in correct format (HH:MM)
+    final startTime = _parseTime(_eventTimeController.text);
+    final endTime = _parseTime(_eventEndTimeController.text);
 
-    if (startTime == null || endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter time in HH:MM format.'),
-        ),
-      );
-      return;
+    if (startTime != null && endTime != null) {
+      if (endTime.hour < startTime.hour || 
+         (endTime.hour == startTime.hour && endTime.minute <= startTime.minute)) {
+        setDialogState(() => _dialogError = 'End time must be after start time.');
+        return;
+      }
+    } else {
+       setDialogState(() => _dialogError = 'Invalid time format.');
+       return;
     }
 
-    final startDateTime = DateTime(
-      parsedDate.year,
-      parsedDate.month,
-      parsedDate.day,
-      startTime.hour,
-      startTime.minute,
-    );
-
-    final endDateTime = DateTime(
-      parsedDate.year,
-      parsedDate.month,
-      parsedDate.day,
-      endTime.hour,
-      endTime.minute,
-    );
-
-    if (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End time must be after start time.'),
-        ),
-      );
-      return;
-    }
-
+    // If all ok, we show spinner and send to Supabase
+    setDialogState(() {
+      _dialogError = null;
+      _isCreating = true;
+    });
+    // Send to Supabase
     try {
+      final startDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, startTime.hour, startTime.minute);
+      final endDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, endTime.hour, endTime.minute);
+
       await _eventService.createEvent(
         communityId: widget.community.id,
-        title: title,
+        title: _eventTitleController.text.trim(),
         date: parsedDate,
         startTime: startDateTime,
         endTime: endDateTime,
-        location: location,
-        description: description,
+        location: _eventLocationController.text.trim(),
+        description: _eventDescriptionController.text.trim(),
         category: 'General',
         capacity: 0,
       );
 
       if (!mounted) return;
-
-      Navigator.pop(context);
-
+      
+      Navigator.pop(context); // Close dialog
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Event created successfully.')),
       );
-
       await _loadEvents();
+      
     } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create event: $error')),
-      );
+      // If creation fails, stop loading spinner and show error
+      setDialogState(() {
+        _dialogError = 'Failed to create event: $error';
+        _isCreating = false;
+      });
     }
   }
 }

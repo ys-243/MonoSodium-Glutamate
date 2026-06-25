@@ -31,15 +31,21 @@ class Event {
     required this.isRegistered,
   });
 
-  factory Event.fromSupabase(Map<String, dynamic> map, {
-      required int attendees,
-      required bool isRegistered,
-    }) {
-      final startTime = DateTime.parse(map['start_time'] as String).toLocal();
+  factory Event.fromSupabase(Map<String, dynamic> map, 
+  {required int attendees, required bool isRegistered}) {
+    final startTime = DateTime.parse(map['start_time'] as String).toLocal();
 
-      final endTime = map['end_time'] != null
-          ? DateTime.parse(map['end_time'] as String).toLocal()
-          : null;
+    final endTime = map['end_time'] != null
+      ? DateTime.parse(map['end_time'] as String).toLocal()
+      : null;
+
+
+    final createdAtStr = map['created_at'] as String?;
+
+    // If supabase now() function fails, then this is backup.
+    final createdAt = createdAtStr != null 
+      ? DateTime.parse(createdAtStr).toLocal() 
+      : DateTime.now();
 
     return Event(
       id: map['id'] as String,
@@ -50,7 +56,7 @@ class Event {
       location: map['location'] as String? ?? 'No location provided',
       date: startTime,
       time: _formatTimeRange(startTime, endTime),
-      createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
+      createdAt: createdAt,
       category: map['category'] as String? ?? 'Social',
       capacity: map['capacity'] as int? ?? 0,
       organizer: map['organizer'] as String? ?? 'Community Member',
