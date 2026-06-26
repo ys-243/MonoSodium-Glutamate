@@ -230,19 +230,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: colorScheme.onSurfaceVariant),
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text('Register'),
-                    ),
-                  ],
-                ),
+                // Deprecated registration prompt, replaced by the "Sign up" button above
+                // Row(
+                //   mainAxisAlignment: MainAxisAlignment.center,
+                //   children: [
+                //     Text(
+                //       "Don't have an account? ",
+                //       style: TextStyle(color: colorScheme.onSurfaceVariant),
+                //     ),
+                //     TextButton(
+                //       onPressed: () {},
+                //       child: const Text('Register'),
+                //     ),
+                //   ],
+                // ),
+                //
+                
               ],
             ),
           ),

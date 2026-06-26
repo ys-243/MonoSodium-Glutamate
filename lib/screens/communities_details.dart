@@ -305,6 +305,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
           // Can only remove if you are an admin/owner, and the target is not yourself nor the owner.
           final canRemove = _canEdit && memberUserId != currentUserId && role != 'owner';
+          final canPromote = _currentRole == CommunityRole.owner && role == 'member';
+          final canDemote = _currentRole == CommunityRole.owner && role == 'admin';
 
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
@@ -322,13 +324,38 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               ),
               subtitle: Text(role.toUpperCase()),
               
-              // We use a Row here so we can show the Admin Shield AND the Remove button
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (role == 'owner' || role == 'admin')
-                    Icon(Icons.shield, color: Theme.of(context).colorScheme.primary, size: 20),
+                    Tooltip(
+                      // show whether they are the owner or an admin
+                      message: role == 'owner' ? 'Community Owner' : 'Community Admin',
+                      triggerMode: TooltipTriggerMode.tap, 
+                      child: Icon(Icons.shield, color: Theme.of(context).colorScheme.primary, size: 20),
+                    ),
                     
+                  // Promote Button
+                  if (canPromote) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.stars, color: Colors.amber),
+                      tooltip: 'Promote to Admin',
+                      onPressed: () => _confirmPromoteMember(memberUserId, name),
+                    ),
+                  ],
+
+                  // Demote Button
+                  if (canDemote) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.remove_moderator, color: Colors.orange),
+                      tooltip: 'Demote to Member',
+                      onPressed: () => _confirmDemoteMember(memberUserId, name),
+                    ),
+                  ],
+
+                  // Remove Button
                   if (canRemove) ...[
                     const SizedBox(width: 8),
                     IconButton(
@@ -596,6 +623,90 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error removing member: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmPromoteMember(String userId, String userName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Promote to Admin'),
+        content: Text('Are you sure you want to promote $userName to an Admin? They will be able to moderate content and manage the waitlist.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+            child: const Text('Promote'),
+          ),
+        ],
+      ),
+    );
+
+    // If confirmed, update the role.
+    if (confirm == true) {
+      try {
+        await _communityService.promoteToAdmin(widget.community.id, userId);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$userName is now an Admin!')),
+        );
+        
+        _loadMembers(); // Refresh the list to reflect the new role
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error promoting member: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDemoteMember(String userId, String userName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Demote Admin'),
+        content: Text('Are you sure you want to demote $userName to a regular member? They will lose their moderation privileges.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange, // Warning color
+            ),
+            child: const Text('Demote'),
+          ),
+        ],
+      ),
+    );
+
+    // If confirmed, update the role.
+    if (confirm == true) {
+      try {
+        await _communityService.demoteToMember(widget.community.id, userId);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$userName was demoted to a regular member.')),
+        );
+        
+        _loadMembers(); // Refresh the list to reflect the new role
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error demoting member: $e')),
         );
       }
     }

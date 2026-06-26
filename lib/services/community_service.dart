@@ -186,4 +186,18 @@ class CommunityService {
         .eq('community_id', communityId)
         .eq('user_id', userId);
   }
+
+  // Promotes a regular member to an admin.
+  Future<void> promoteToAdmin(String communityId, String userId) async {
+    await _supabase.from('community_members').update({
+      'role': 'admin',
+    }).eq('community_id', communityId).eq('user_id', userId);
+  }
+
+  // Demotes an admin back to a regular member. ONLY DONE BY OWNER.
+  Future<void> demoteToMember(String communityId, String userId) async {
+    await _supabase.from('community_members').update({
+      'role': 'member',
+    }).eq('community_id', communityId).eq('user_id', userId);
+  }
 }
