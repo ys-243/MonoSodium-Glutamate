@@ -8,6 +8,7 @@ enum CommunityRole {
   member,
   admin,
   owner,
+  pending, // For users who have requested to join but haven't been approved yet
 }
 
 class Community {
@@ -57,7 +58,7 @@ class Community {
       name: json['name'],
       description: json['description'],
       level: parseCommunityLevel(json['level']),
-      isJoined: role != null, // If they have a role, they are joined
+      isJoined: role != null && role != CommunityRole.pending, // If they have a role, they are joined
       currentUserRole: role,
       members: json['member_count']?[0]?['count'] ?? 0, 
       posts: 0, 

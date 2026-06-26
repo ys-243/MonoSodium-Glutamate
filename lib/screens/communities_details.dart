@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/models/community.dart';
 import 'package:plannus/services/community_service.dart';
 import 'package:plannus/models/events.dart';
@@ -39,16 +40,41 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   String? _dialogError;
 
   // State variables for members
-  List<Map<String, String>> _members = [];
+  List<Map<String, dynamic>> _members = [];
   bool _isLoadingMembers = true;
   String? _membersError;
+  
+  CommunityRole? _currentRole;
+  bool _isJoining = false;
+
+  List<Map<String, dynamic>> _pendingRequests = [];
+  bool _isLoadingRequests = true;
+
+  bool get _isApprovedMember => 
+      _currentRole == CommunityRole.owner || 
+      _currentRole == CommunityRole.admin || 
+      _currentRole == CommunityRole.member;
+  
+  bool get _canEdit => 
+    widget.community.currentUserRole == CommunityRole.owner || 
+    widget.community.currentUserRole == CommunityRole.admin;
+      
+  bool get _isPending => _currentRole == CommunityRole.pending;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+
+    // Shows the Admin tab only if the user is an owner or admin of the community.
+    _tabController = TabController(length: _canEdit? 4 : 3, vsync: this);
+    _currentRole = widget.community.currentUserRole;
+    
     _loadEvents(); 
     _loadMembers(); 
+
+    if (_canEdit) {
+      _loadPendingRequests(); // Fetch the waitlist if they are an admin
+    }
   }
 
   @override
@@ -64,10 +90,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.dispose();
   }
 
-  bool get _canEdit => 
-    widget.community.currentUserRole == CommunityRole.owner || 
-    widget.community.currentUserRole == CommunityRole.admin;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,10 +97,11 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         title: Text(widget.community.name),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Discussions'),
-            Tab(text: 'Events'),
-            Tab(text: 'Members'),
+          tabs: [
+            const Tab(text: 'Discussions'),
+            const Tab(text: 'Events'),
+            const Tab(text: 'Members'),
+            if (_canEdit) const Tab(text: 'Admin'), // Only shows for owners/admins
           ],
         ),
       ),
@@ -117,15 +140,49 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 ],
               ),
             ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDiscussionsTab(),
-                _buildEventsTab(),
-                _buildMembersTab(),
-              ],
+
+          // Join/Pending Banner
+          if (!_isApprovedMember)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: _isPending 
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.hourglass_empty, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      const Text('Your request to join is pending approval.', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  )
+                : FilledButton.icon(
+                    onPressed: _isJoining ? null : _handleJoin,
+                    icon: _isJoining 
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Icon(widget.community.level == CommunityLevel.open ? Icons.group_add : Icons.lock_person),
+                    label: Text(widget.community.level == CommunityLevel.open ? 'Join Community' : 'Request to Join'),
+                  ),
             ),
+
+          // Tab Content (Locked if not a member)
+          Expanded(
+            child: (!_isApprovedMember && widget.community.level != CommunityLevel.open)
+                ? const Center(
+                    child: Text(
+                      'You must join this community to view its content.',
+                      style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+                    ),
+                  )
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildDiscussionsTab(),
+                      _buildEventsTab(),
+                      _buildMembersTab(),
+                      if (_canEdit) _buildAdminTab(),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -240,8 +297,14 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         itemCount: _members.length,
         itemBuilder: (context, index) {
           final member = _members[index];
-          final name = member['name']!;
-          final role = member['role']!;
+          final name = member['name'];
+          final role = member['role'];
+          final memberUserId = member['user_id']; // Using the ID we ensured was returned
+          
+          final currentUserId = Supabase.instance.client.auth.currentUser!.id;
+
+          // Can only remove if you are an admin/owner, and the target is not yourself nor the owner.
+          final canRemove = _canEdit && memberUserId != currentUserId && role != 'owner';
 
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
@@ -258,12 +321,103 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: Text(role.toUpperCase()),
-              trailing: role == 'owner' || role == 'admin' 
-                  ? Icon(Icons.shield, color: Theme.of(context).colorScheme.primary, size: 20) 
-                  : null,
+              
+              // We use a Row here so we can show the Admin Shield AND the Remove button
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (role == 'owner' || role == 'admin')
+                    Icon(Icons.shield, color: Theme.of(context).colorScheme.primary, size: 20),
+                    
+                  if (canRemove) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.person_remove, color: Colors.red),
+                      tooltip: 'Remove Member',
+                      onPressed: () => _confirmRemoveMember(memberUserId, name),
+                    ),
+                  ],
+                ],
+              ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildAdminTab() {
+    if (_isLoadingRequests) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadPendingRequests,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'Pending Join Requests',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          
+          if (_pendingRequests.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Text('No pending requests at the moment.'),
+              ),
+            )
+          else
+            ..._pendingRequests.map((request) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  child: Text(
+                    request['name'][0].toUpperCase(),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                  ),
+                ),
+                title: Text(request['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(request['email']),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // REJECT BUTTON
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      tooltip: 'Reject',
+                      onPressed: () async {
+                        try {
+                          await _communityService.rejectMember(widget.community.id, request['user_id']);
+                          _loadPendingRequests(); // Refresh list after action
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error rejecting: $e')));
+                        }
+                      },
+                    ),
+                    // APPROVE BUTTON
+                    IconButton(
+                      icon: const Icon(Icons.check, color: Colors.green),
+                      tooltip: 'Approve',
+                      style: IconButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.1)),
+                      onPressed: () async {
+                        try {
+                          await _communityService.approveMember(widget.community.id, request['user_id']);
+                          _loadPendingRequests(); // Refresh list after action
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member approved!')));
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error approving: $e')));
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            )),
+        ],
       ),
     );
   }
@@ -350,6 +504,100 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         _eventsError = error.toString();
         _isLoadingEvents = false;
       });
+    }
+  }
+
+  // Load pending requests for admin users.
+  Future<void> _loadPendingRequests() async {
+    setState(() => _isLoadingRequests = true);
+    try {
+      final requests = await _communityService.fetchPendingMembers(widget.community.id);
+      if (!mounted) return;
+      setState(() {
+        _pendingRequests = requests;
+        _isLoadingRequests = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingRequests = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load requests: $e')),
+      );
+    }
+  }
+
+  // Handle the join or request to join action based on community level.
+  Future<void> _handleJoin() async {
+    setState(() => _isJoining = true);
+    try {
+      final newRole = await _communityService.joinCommunity(
+        widget.community.id, 
+        widget.community.level
+      );
+      
+      if (!mounted) return;
+      setState(() {
+        _currentRole = newRole;
+        _isJoining = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newRole == CommunityRole.pending 
+            ? 'Request sent! Waiting for admin approval.' 
+            : 'Successfully joined the community!'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isJoining = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to join: $e')),
+      );
+    }
+  }
+
+  // Confirm and remove a member from the community.
+  Future<void> _confirmRemoveMember(String userId, String userName) async {
+    // Show confirmation popup
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: Text('Are you sure you want to remove $userName from the community?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    // If button pressed confirmed, then remove.
+    if (confirm == true) {
+      try {
+        await _communityService.removeMember(widget.community.id, userId);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$userName was removed.')),
+        );
+        
+        _loadMembers(); // Refresh the list again
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error removing member: $e')),
+        );
+      }
     }
   }
 

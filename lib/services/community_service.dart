@@ -54,6 +54,7 @@ class CommunityService {
     switch (roleStr) {
       case 'owner': return CommunityRole.owner;
       case 'admin': return CommunityRole.admin;
+      case 'pending': return CommunityRole.pending;
       default: return CommunityRole.member;
     }
   }
@@ -73,11 +74,80 @@ class CommunityService {
     await _supabase.from('communities').delete().eq('id', communityId);
   }
 
-  // Fetches all members of a community along with their roles.
-  Future<List<Map<String, String>>> fetchCommunityMembers(String communityId) async {
+  // Function to join a community.
+  Future<CommunityRole> joinCommunity(String communityId, CommunityLevel level) async {
+    final userId = _supabase.auth.currentUser!.id;
+    
+    // Determine their role based on the community privacy level
+    final role = (level == CommunityLevel.open) ? 'member' : 'pending';
+
+    await _supabase.from('community_members').upsert({
+      'community_id': communityId,
+      'user_id': userId,
+      'role': role,
+    }, onConflict: 'community_id,user_id');
+
+    return _parseRole(role);
+  }
+
+  // TODO: Function to leave a community.
+
+  // Fetches a list of users whose role is currently 'pending'.
+  Future<List<Map<String, dynamic>>> fetchPendingMembers(String communityId) async {
     final response = await _supabase
         .from('community_members')
         .select('''
+          user_id,
+          profiles (
+            first_name,
+            last_name,
+            user_name,
+            email
+          )
+        ''')
+        .eq('community_id', communityId)
+        .eq('role', 'pending');
+
+    return (response as List).map((row) {
+      final profile = row['profiles'] as Map<String, dynamic>?;
+      if (profile == null) return {'user_id': row['user_id'], 'name': 'Unknown User'};
+
+      final userName = profile['user_name'] as String?;
+      final firstName = profile['first_name'] as String? ?? '';
+      final lastName = profile['last_name'] as String? ?? '';
+      
+      final displayName = (userName != null && userName.isNotEmpty)
+          ? userName
+          : '$firstName $lastName'.trim();
+
+      return {
+        'user_id': row['user_id'],
+        'name': displayName.isNotEmpty ? displayName : 'Unknown User',
+        'email': profile['email'] ?? 'No email provided',
+      };
+    }).toList();
+  }
+
+  // Approves a user by updating their role from 'pending' to 'member'
+  Future<void> approveMember(String communityId, String userId) async {
+    await _supabase.from('community_members').update({
+      'role': 'member',
+    }).eq('community_id', communityId).eq('user_id', userId);
+  }
+
+  // Rejects a user by deleting their request from the database
+  Future<void> rejectMember(String communityId, String userId) async {
+    await _supabase.from('community_members').delete()
+        .eq('community_id', communityId)
+        .eq('user_id', userId);
+  }
+
+  // Fetches all members of a community along with their roles.
+  Future<List<Map<String, dynamic>>> fetchCommunityMembers(String communityId) async {
+    final response = await _supabase
+        .from('community_members')
+        .select('''
+          user_id,
           role,
           profiles (
             first_name,
@@ -86,13 +156,13 @@ class CommunityService {
           )
         ''')
         .eq('community_id', communityId)
-        .order('role', ascending: true); // Optional: Puts admins/owners near the top
+        .order('role', ascending: true); // We put admins/owners near the top.
 
     return (response as List).map((row) {
       final profile = row['profiles'] as Map<String, dynamic>?;
       final role = row['role'] as String? ?? 'member';
-      
-      if (profile == null) return {'name': 'Unknown User', 'role': role};
+
+      if (profile == null) return {'user_id': row['user_id'], 'name': 'Unknown User', 'role': role};
 
       final userName = profile['user_name'] as String?;
       final firstName = profile['first_name'] as String? ?? '';
@@ -103,9 +173,17 @@ class CommunityService {
           : '$firstName $lastName'.trim();
 
       return {
+        'user_id': row['user_id'],
         'name': displayName.isNotEmpty ? displayName : 'Unknown User',
         'role': role,
       };
     }).toList();
+  }
+
+  // Allows an admin or owner to remove a member from the community.
+  Future<void> removeMember(String communityId, String userId) async {
+    await _supabase.from('community_members').delete()
+        .eq('community_id', communityId)
+        .eq('user_id', userId);
   }
 }
