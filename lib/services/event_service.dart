@@ -55,7 +55,7 @@ class EventService {
 
     final eventRows = await _supabase
         .from('events')
-        .select()
+        .select('*, communities(name, level), profiles(first_name, last_name, user_name)')
         .eq('community_id', communityId)
         .order('start_time', ascending: true);
 
@@ -127,7 +127,7 @@ class EventService {
     // from these communities, fetch events
     final eventRows = await _supabase
         .from('events')
-        .select()
+        .select('*, communities(name, level), profiles(first_name, last_name, user_name)')
         .inFilter('community_id', combinedCommunityIds)
         .order('start_time', ascending: true);
 
@@ -230,7 +230,7 @@ class EventService {
     return false; // Didn't auto-join, user was already a member.
   }
 
-  Future<void> cancelRsvp(String eventId) async {
+  Future<void> cancelRSVP(String eventId) async {
     final currentUser = _supabase.auth.currentUser;
 
     if (currentUser == null) {
@@ -267,7 +267,7 @@ class EventService {
 
     final eventRows = await _supabase
         .from('events')
-        .select()
+        .select('*, communities(name, level), profiles(first_name, last_name, user_name)')
         .inFilter('id', eventIds)
         .order('start_time', ascending: true);
 

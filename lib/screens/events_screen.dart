@@ -84,7 +84,7 @@ class _EventsScreenState extends State<EventsScreen>
     }
   }
 
-  Future<void> _handleRsvp(Event event) async {
+  Future<void> _handleRSVP(Event event) async {
     setState(() {
       _processingRSVPs.add(event.id);
     });
@@ -141,8 +141,8 @@ class _EventsScreenState extends State<EventsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(autoJoined
-              ? 'Registered for ${event.title} and joined the community!'
-              : 'Registered for ${event.title}'),
+              ? "Registered for '${event.title}' and joined the community!"
+              : "Registered for '${event.title}'"),
         ),
       );
     } catch (error) {
@@ -160,6 +160,158 @@ class _EventsScreenState extends State<EventsScreen>
         });
       }
     }
+  }
+  
+  // Allows the user to cancel their RSVP for an event. It first shows a confirmation dialog. 
+  Future<void> _handleCancelRsvp(Event event) async {
+    setState(() => _processingRSVPs.add(event.id));
+
+    try {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancel RSVP?'),
+          content: Text('Are you sure you want to unregister from ${event.title}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep RSVP'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Unregister'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) {
+        setState(() => _processingRSVPs.remove(event.id));
+        return;
+      }
+      
+      // tell the service to cancel the RSVP.
+      await _eventService.cancelRSVP(event.id);
+      await _loadEvents();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unregistered from ${event.title}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _processingRSVPs.remove(event.id));
+    }
+  }
+
+  // show event details in a dialog when event card is tapped. 
+  void _showEventDetailsDialog(Event event) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(event.title),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min, 
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Event Description 
+                const Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  event.description.isNotEmpty 
+                      ? event.description 
+                      : 'No description provided.',
+                ),
+                const SizedBox(height: 24),
+
+                // Attendees Header 
+                Row(
+                  children: [
+                    const Icon(Icons.people, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Attendees (${event.attendees})',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                const Divider(),
+
+                // Dynamic Attendees List 
+                Flexible(
+                  child: FutureBuilder<List<Map<String, String>>>(
+                    future: _eventService.fetchEventAttendees(event.id),
+                    builder: (context, snapshot) {
+                      // Loading State
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      
+                      // Error State
+                      if (snapshot.hasError) {
+                        return Text('Error loading attendees: ${snapshot.error}');
+                      }
+
+                      // Success State
+                      final attendees = snapshot.data ?? [];
+                      // show msg if no attendees
+                      if (attendees.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text('No one has registered yet. Be the first!'),
+                        );
+                      }
+
+                      // Build the list of avatars and names.
+                      return ListView.builder(
+                        shrinkWrap: true, 
+                        itemCount: attendees.length,
+                        itemBuilder: (context, index) {
+                          final name = attendees[index]['name']!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              child: Text(
+                                name[0].toUpperCase(),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                              ),
+                            ),
+                            title: Text(name),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   List<Event> _getFilteredEvents() {
@@ -370,91 +522,112 @@ class _EventsScreenState extends State<EventsScreen>
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+      clipBehavior: Clip.antiAlias, 
+      child: InkWell(
+        onTap: () => _showEventDetailsDialog(event), // show event details dialog when card is tapped
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                _buildCategoryChip(event.category),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              event.description,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  _buildCommunityChip(event.communityName, event.communityLevel),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            _buildEventInfo(
-              Icons.calendar_today,
-              '${event.date.day}/${event.date.month}/${event.date.year}',
-            ),
-            const SizedBox(height: 4),
-            _buildEventInfo(Icons.access_time, event.time),
-            const SizedBox(height: 4),
-            _buildEventInfo(Icons.location_on, event.location),
-            const SizedBox(height: 4),
-            _buildEventInfo(
-              Icons.people,
-              event.capacity > 0
-                  ? '${event.attendees} / ${event.capacity} attending'
-                  : '${event.attendees} attending',
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'By ${event.organizer}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    softWrap: true,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+
+              const SizedBox(height: 8),
+              Text(
+                event.description,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 12),
-                if (event.isRegistered)
-                  const OutlinedButton(
-                    onPressed: null,
-                    child: Text('Registered'),
-                  )
-                else if (isFull)
-                  const OutlinedButton(
-                    onPressed: null,
-                    child: Text('Full'),
-                  )
-                else
-                  FilledButton(
-                    // Disable the button when processing
-                    onPressed: _processingRSVPs.contains(event.id) 
-                        ? null 
-                        : () => _handleRsvp(event),
-                    // change to spin
-                    child: _processingRSVPs.contains(event.id)
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('RSVP'),
+              ),
+
+              const SizedBox(height: 12),
+              _buildEventInfo(
+                Icons.calendar_today,
+                '${event.date.day}/${event.date.month}/${event.date.year}',
+              ),
+
+              const SizedBox(height: 4),
+              _buildEventInfo(Icons.access_time, event.time),
+
+              const SizedBox(height: 4),
+              _buildEventInfo(Icons.location_on, event.location),
+
+              const SizedBox(height: 4),
+              _buildEventInfo(
+                Icons.people,
+                event.capacity > 0
+                    ? '${event.attendees} / ${event.capacity} attending'
+                    : '${event.attendees} attending',
+              ),
+
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'By ${event.organiser}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      softWrap: true,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-              ],
-            ),
-          ],
+
+                  const SizedBox(width: 12),
+                  if (event.isRegistered) 
+                    OutlinedButton(
+                      onPressed: _processingRSVPs.contains(event.id)
+                          ? null
+                          : () => _handleCancelRsvp(event),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                        side: BorderSide(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
+                      ),
+                      child: _processingRSVPs.contains(event.id)
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Unregister'),
+                    )
+                  
+                  else if (isFull)
+                    const OutlinedButton(
+                      onPressed: null,
+                      child: Text('Full'),
+                    )
+                    
+                  else
+                    FilledButton(
+                      // Disable the button when processing
+                      onPressed: _processingRSVPs.contains(event.id) 
+                          ? null 
+                          : () => _handleRSVP(event),
+                      // change to spinner 
+                      child: _processingRSVPs.contains(event.id)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('RSVP'),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -482,42 +655,24 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  Widget _buildCategoryChip(String category) {
+  Widget _buildCommunityChip(String communityName, String level) {
     Color color;
 
-    switch (category) {
-      case 'Technology':
-        color = Colors.blue;
-        break;
-      case 'Sports':
-        color = Colors.green;
-        break;
-      case 'Career':
-        color = Colors.purple;
-        break;
-      case 'Academic':
-        color = Colors.orange;
-        break;
-      case 'Social':
-        color = Colors.pink;
-        break;
-      default:
-        color = Colors.grey;
+    switch (level.toLowerCase()) {
+      case 'intimate': color = Colors.purple; break;
+      case 'closed': color = Colors.blue; break;
+      case 'open': color = Colors.green; break;
+      default: color = Colors.grey;
     }
 
     return Chip(
       label: Text(
-        category,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-        ),
+        communityName,
+        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
       ),
       visualDensity: VisualDensity.compact,
       backgroundColor: color.withValues(alpha: 0.1),
-      side: BorderSide(
-        color: color.withValues(alpha: 0.3),
-      ),
+      side: BorderSide(color: color.withValues(alpha: 0.3)),
     );
   }
 
