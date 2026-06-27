@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/events.dart';
@@ -35,6 +36,8 @@ class _EventsScreenState extends State<EventsScreen>
 
   List<Event> _events = [];
 
+  final Set<String> _processingRSVPs = {};
+
   @override
   void initState() {
     super.initState();
@@ -57,13 +60,11 @@ class _EventsScreenState extends State<EventsScreen>
     try {
       late final List<Event> events;
 
-      if (widget.showRegisteredOnly) {
-        events = await _eventService.fetchRegisteredEventsForCurrentUser();
+      if (widget.communityId == null) {
+        // If there's no specific community ID, we show the events on the Global Events screen.
+        events = await _eventService.fetchGlobalEvents();
       } else {
-        if (widget.communityId == null) {
-          throw Exception('Missing communityId for community events screen');
-        }
-
+        // If there's a specific community ID, we show the events for that community.
         events = await _eventService.fetchCommunityEvents(widget.communityId!);
       }
 
@@ -84,25 +85,80 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Future<void> _handleRsvp(Event event) async {
+    setState(() {
+      _processingRSVPs.add(event.id);
+    });
+
     try {
-      await _eventService.rsvpToEvent(event.id);
-      await _loadEvents();
+      // First check if the user is already a member of this community
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+
+      final membership = await Supabase.instance.client
+          .from('community_members')
+          .select('role')
+          .eq('community_id', event.communityId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      // If they are NOT a member, pause and ask for confirmation
+      if (membership == null) {
+        if (!mounted) return;
+        final confirm = await showDialog<bool>( // Returns true if they click "Proceed", false if they click "Cancel" or tap outside.
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Auto-Join Community?'),
+            content: const Text(
+              'This event belongs to an open community you have not joined yet. RSVPing will automatically add you as a member of the community. Do you want to proceed?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Proceed'),
+              ),
+            ],
+          ),
+        );
+
+        // If they click Cancel or tap outside the dialog, abort the RSVP
+        if (confirm != true) {
+          setState(() {
+            _processingRSVPs.remove(event.id);
+          });
+          return;
+        }
+      }
+
+      // If confirm, RSVP and auto-join if necessary
+      final autoJoined = await _eventService.rsvpToEvent(event.id, event.communityId);
+      await _loadEvents(); // Refresh the list to reflect the new RSVP status
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Registered for ${event.title}'),
+          content: Text(autoJoined
+              ? 'Registered for ${event.title} and joined the community!'
+              : 'Registered for ${event.title}'),
         ),
       );
     } catch (error) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to RSVP: $error'),
         ),
       );
+    } finally {
+      // Turn off the loading spinner regardless of success or failure
+      if (mounted) {
+        setState(() {
+          _processingRSVPs.remove(event.id);
+        });
+      }
     }
   }
 
@@ -152,8 +208,10 @@ class _EventsScreenState extends State<EventsScreen>
         title: Text(
           widget.showRegisteredOnly
               ? 'My Events'
-              : '${widget.communityName} Events',
-),
+              : widget.communityName != null
+                  ? '${widget.communityName} Events'
+                  : 'Events',
+        ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -261,10 +319,10 @@ class _EventsScreenState extends State<EventsScreen>
       child: TabBarView(
         controller: _tabController,
         children: [
-          _buildEventsList(filteredEvents),
-          _buildEventsList(
-            filteredEvents.where((event) => event.isRegistered).toList(),
-          ),
+          // Discover Tab: Only show events they haven't registered for.
+          _buildEventsList(filteredEvents.where((event) => !event.isRegistered).toList()),
+          // My Events Tab: Only show registered events.
+          _buildEventsList(filteredEvents.where((event) => event.isRegistered).toList()),
           _buildCalendarView(),
         ],
       ),
@@ -381,8 +439,18 @@ class _EventsScreenState extends State<EventsScreen>
                   )
                 else
                   FilledButton(
-                    onPressed: () => _handleRsvp(event),
-                    child: const Text('RSVP'),
+                    // Disable the button when processing
+                    onPressed: _processingRSVPs.contains(event.id) 
+                        ? null 
+                        : () => _handleRsvp(event),
+                    // change to spin
+                    child: _processingRSVPs.contains(event.id)
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('RSVP'),
                   ),
               ],
             ),

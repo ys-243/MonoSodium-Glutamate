@@ -33,9 +33,7 @@ class _MainScreenState extends State<MainScreen> {
         },
       ),
       const CommunitiesScreen(),
-      const EventsScreen(
-        showRegisteredOnly: true,
-      ),
+      const EventsScreen(), // new logic handles the separation natively, so we show the EventsScreen here without any parameters.
       ProfileScreen(
         onLogout: () async {
           await Supabase.instance.client.auth.signOut();

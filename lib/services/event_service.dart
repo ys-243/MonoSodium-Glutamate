@@ -99,6 +99,69 @@ class EventService {
     }).toList();
   }
 
+  // Fetches events from communities that the user is a member of or that are open to all users.
+  Future<List<Event>> fetchGlobalEvents() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) throw Exception('User is not logged in');
+
+    // Fetch joined community IDs
+    final joinedCommunities = await _supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', currentUser.id)
+        .inFilter('role', ['member', 'admin', 'owner']);
+    final joinedIds = (joinedCommunities as List).map((r) => r['community_id'] as String).toList();
+
+    // Fetch open community IDs
+    final openCommunities = await _supabase
+        .from('communities')
+        .select('id')
+        .eq('level', 'open');
+    final openIds = (openCommunities as List).map((r) => r['id'] as String).toList();
+
+    // Combine
+    final combinedCommunityIds = {...joinedIds, ...openIds}.toList();
+
+    if (combinedCommunityIds.isEmpty) return [];
+
+    // from these communities, fetch events
+    final eventRows = await _supabase
+        .from('events')
+        .select()
+        .inFilter('community_id', combinedCommunityIds)
+        .order('start_time', ascending: true);
+
+    // Fetch attendee counts and check if current user is registered
+    final eventIds = (eventRows as List).map((e) => e['id'] as String).toList();
+    final allAttendeeRows = eventIds.isEmpty ? [] : await _supabase
+        .from('event_attendees')
+        .select('event_id, user_id, status')
+        .inFilter('event_id', eventIds)
+        .eq('status', 'registered');
+
+    final Map<String, int> attendeeCountByEvent = {};
+    final Set<String> registeredEventIds = {};
+
+    for (final attendee in allAttendeeRows) {
+      final eventId = attendee['event_id'] as String;
+      final userId = attendee['user_id'] as String;
+      
+      attendeeCountByEvent[eventId] = (attendeeCountByEvent[eventId] ?? 0) + 1;
+      if (userId == currentUser.id) {
+        registeredEventIds.add(eventId);
+      }
+    }
+
+    return eventRows.map<Event>((eventMap) {
+      final eventId = eventMap['id'] as String;
+      return Event.fromSupabase(
+        eventMap,
+        attendees: attendeeCountByEvent[eventId] ?? 0,
+        isRegistered: registeredEventIds.contains(eventId),
+      );
+    }).toList();
+  }
+
   // Fetches a list of attendee names for a specific event
   Future<List<Map<String, String>>> fetchEventAttendees(String eventId) async {
     final response = await _supabase
@@ -131,13 +194,13 @@ class EventService {
     }).toList();
   }
 
-  Future<void> rsvpToEvent(String eventId) async {
+  // Returns true if the user was auto-joined to the community, false if they were already a member.
+  // WILL ALWAYS RSVP the user to the event, regardless of their community membership status.
+  Future<bool> rsvpToEvent(String eventId, String communityId) async {
     final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) throw Exception('User is not logged in');
 
-    if (currentUser == null) {
-      throw Exception('User is not logged in');
-    }
-
+    // tell supabase that user is attending the event
     await _supabase.from('event_attendees').upsert(
       {
         'event_id': eventId,
@@ -146,6 +209,25 @@ class EventService {
       },
       onConflict: 'event_id,user_id',
     );
+
+    // check if user is a member of the community.
+    final membership = await _supabase
+        .from('community_members')
+        .select('role')
+        .eq('community_id', communityId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+    // If not, auto-join them as a member.
+    if (membership == null) {
+      await _supabase.from('community_members').insert({
+        'community_id': communityId,
+        'user_id': currentUser.id,
+        'role': 'member',
+      });
+      return true; // Means auto-joined
+    }
+    
+    return false; // Didn't auto-join, user was already a member.
   }
 
   Future<void> cancelRsvp(String eventId) async {

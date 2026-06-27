@@ -915,7 +915,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                     )
                   : FilledButton(
                       onPressed: () async {
-                        await _eventService.rsvpToEvent(event.id);
+                        await _eventService.rsvpToEvent(event.id, event.communityId);
                         await _loadEvents();
                       },
                       child: const Text('RSVP'),
