@@ -28,3 +28,6 @@ Orbital 25/26
 * Current release: v0.1
 
 Latest release version can be found in ["Release"](https://github.com/ys-243/MonoSodium-Glutamate/releases) tab of GitHub repository. 
+
+### Android
+To run the app, download the .apk file from the ["Release"](https://github.com/ys-243/MonoSodium-Glutamate/releases) tab and install it on an Android device. Google Android Simulators should also work fine.

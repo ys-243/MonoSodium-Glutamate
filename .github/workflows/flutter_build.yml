@@ -1,9 +1,7 @@
 name: Flutter Release Build
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   # --- ANDROID BUILD JOB ---
