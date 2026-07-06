@@ -20,7 +20,7 @@ class AuthService extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // 2. If there IS a session, check if their profile exists in the database
+        // If there is a session, check if their profile exists in the database
         return FutureBuilder(
           // .maybeSingle() returns null instead of an error if the row doesn't exist
           future: Supabase.instance.client

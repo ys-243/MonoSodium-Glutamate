@@ -20,7 +20,7 @@ class Community {
   final int posts;
   final bool isJoined;
   final String? createdBy;
-  final CommunityRole? currentUserRole; 
+  final CommunityRole? currentUserRole;
 
   Community({
     required this.id,

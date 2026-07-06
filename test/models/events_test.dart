@@ -80,7 +80,7 @@ void main() {
         'created_by': 'user-789',
         'start_time': '2026-07-10T10:00:00.000Z',
         'profiles': {
-          'user_name': '', // Blank username!
+          'user_name': '', // Blank username
           'first_name': 'Grace',
           'last_name': 'Hopper',
         }

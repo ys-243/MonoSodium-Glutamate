@@ -4,7 +4,10 @@ import 'package:plannus/screens/main_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final SupabaseClient? supabaseClient;
+
+  // Dependency injection of SupabaseClient for testing.
+  const LoginScreen({super.key, this.supabaseClient}); 
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -32,8 +35,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
+    // Use the injected SupabaseClient for testing if provided, otherwise use the default instance.
+    final client = widget.supabaseClient ?? Supabase.instance.client;
+
     try {
-      final res = await Supabase.instance.client.auth.signInWithPassword(
+      final res = await client.auth.signInWithPassword(
         email: email,
         password: password,
       );
