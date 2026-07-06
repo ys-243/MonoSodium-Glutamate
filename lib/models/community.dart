@@ -53,6 +53,15 @@ class Community {
       }
     }
 
+    // Safely extract the member count to prevent RangeErrors
+    int parsedMembers = 0;
+    final memberCountList = json['member_count'] as List?;
+    
+    // check that it is not null AND not empty before accessing index 0, else fallback to 0.
+    if (memberCountList != null && memberCountList.isNotEmpty) {
+      parsedMembers = memberCountList[0]['count'] ?? 0; 
+    }
+
     return Community(
       id: json['id'],
       name: json['name'],
@@ -60,8 +69,8 @@ class Community {
       level: parseCommunityLevel(json['level']),
       isJoined: role != null && role != CommunityRole.pending, // If they have a role, they are joined
       currentUserRole: role,
-      members: json['member_count']?[0]?['count'] ?? 0, 
-      posts: 0, 
+      members: parsedMembers,
+      posts: 0,
     );
   }
 }
