@@ -27,11 +27,11 @@ class _EventsScreenState extends State<EventsScreen>
   final EventService _eventService = EventService();
 
   String _searchQuery = '';
-  String _selectedCategory = 'All';
+  String _selectedCommunityID = 'All'; // changed to filter by communityID (i.e community) CAA070726
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
 
-  bool _isLoading = true;
+  bool _isLoading = true; // flag to indicate if events are being loaded
   String? _errorMessage;
 
   List<Event> _events = [];
@@ -322,15 +322,15 @@ class _EventsScreenState extends State<EventsScreen>
                   .toLowerCase()
                   .contains(_searchQuery.toLowerCase());
 
-      final matchesCategory =
-          _selectedCategory == 'All' || event.category == _selectedCategory;
+      final matchesCommunity =
+          _selectedCommunityID == 'All' || event.communityId == _selectedCommunityID;
 
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesCommunity;
     }).toList();
   }
 
   List<Event> _getEventsOnSelectedDate() {
-    return _events
+    return _getFilteredEvents()
         .where(
           (event) =>
               event.date.year == _selectedDate.year &&
@@ -341,7 +341,7 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   List<Event> _getEventsForDay(DateTime day) {
-    return _events
+    return _getFilteredEvents()
         .where(
           (event) =>
               event.date.year == day.year &&
@@ -354,6 +354,18 @@ class _EventsScreenState extends State<EventsScreen>
   @override
   Widget build(BuildContext context) {
     final filteredEvents = _getFilteredEvents();
+
+    // Dynamically extract unique communities from the fetched events
+    final Map<String, String> uniqueCommunities = {};
+    for (var event in _events) {
+      uniqueCommunities[event.communityId] = event.communityName;
+    }
+
+    // Update the chip text to show the selected community
+    String filterLabel = 'Filter';
+    if (_selectedCommunityID != 'All') {
+      filterLabel = uniqueCommunities[_selectedCommunityID] ?? 'Filter';
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -394,30 +406,42 @@ class _EventsScreenState extends State<EventsScreen>
                 ),
                 const SizedBox(width: 12),
                 PopupMenuButton<String>(
-                  child: const Chip(
-                    avatar: Icon(Icons.filter_list, size: 18),
-                    label: Text('Filter'),
+                  child: Chip(
+                    avatar: const Icon(Icons.filter_list, size: 18),
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        filterLabel,
+                        overflow: TextOverflow.ellipsis, // for overflowing text
+                      ),
+                    ),
                   ),
                   onSelected: (value) {
                     setState(() {
-                      _selectedCategory = value;
+                      _selectedCommunityID = value;
                     });
                   },
-                  itemBuilder: (context) => [
-                    'All',
-                    'Technology',
-                    'Sports',
-                    'Career',
-                    'Academic',
-                    'Social',
-                  ]
-                      .map(
-                        (category) => PopupMenuItem(
-                          value: category,
-                          child: Text(category),
+                  itemBuilder: (context) {
+                    // Start with the default 'All' option
+                    List<PopupMenuItem<String>> items = [
+                      const PopupMenuItem(
+                        value: 'All',
+                        child: Text('All Communities'),
+                      ),
+                    ];
+
+                    // Dynamically map the extracted communities into the dropdown
+                    items.addAll(
+                      uniqueCommunities.entries.map(
+                        (entry) => PopupMenuItem(
+                          value: entry.key, // communityId
+                          child: Text(entry.value), // communityName
                         ),
-                      )
-                      .toList(),
+                      ),
+                    );
+
+                    return items;
+                  },
                 ),
               ],
             ),
