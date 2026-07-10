@@ -955,18 +955,36 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   ],
                 ),
               ),
-              event.isRegistered
-                  ? const OutlinedButton(
-                      onPressed: null,
-                      child: Text('Registered'),
-                    )
-                  : FilledButton(
-                      onPressed: () async {
-                        await _eventService.rsvpToEvent(event.id, event.communityId);
-                        await _loadEvents();
-                      },
-                      child: const Text('RSVP'),
-                    ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 36),
+                  child: event.isRegistered
+                      ? OutlinedButton(
+                          onPressed: null,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(92, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            textStyle: const TextStyle(fontSize: 13),
+                          ),
+                          child: const Text('Registered'),
+                        )
+                      : FilledButton(
+                          onPressed: () async {
+                            await _eventService.rsvpToEvent(event.id, event.communityId);
+                            await _loadEvents();
+                          },
+
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(72, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            textStyle: const TextStyle(fontSize: 13),
+                          ),
+
+                          child: const Text('RSVP'),
+                        ),
+                ),
+              ),
             ],
           ),
         ),
