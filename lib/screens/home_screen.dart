@@ -1,8 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:plannus/models/events.dart';
+import 'package:plannus/services/event_service.dart';
+import 'package:plannus/screens/events_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final void Function(int) onTabSelected;
   const HomeScreen({super.key, required this.onTabSelected});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Service to fetch events the user has registered for
+  final EventService _eventService = EventService();
+
+  DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  
+  List<Event> _events = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserEvents();
+  }
+
+  // Fetch only the events the user has registered for to display on home page calender.
+  Future<void> _loadUserEvents() async {
+    setState(() => _isLoading = true);
+    try {
+      final events = await _eventService.fetchRegisteredEventsForCurrentUser();
+      if (mounted) {
+        setState(() {
+          _events = events;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); // for debug error.
+      }
+    }
+  }
+
+  List<Event> _getEventsForDay(DateTime day) {
+    return _events.where((event) =>
+        event.date.year == day.year &&
+        event.date.month == day.month &&
+        event.date.day == day.day).toList();
+  }
+
+  List<Event> _getEventsOnSelectedDate() {
+    return _getEventsForDay(_selectedDate);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +116,17 @@ class HomeScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
+            // Calender Section
+            const Text(
+              'My Upcoming Schedule',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildCalendarSection(),
+            const SizedBox(height: 32),
             _buildFeatureCard(
               context,
               icon: Icons.people,
@@ -70,7 +135,7 @@ class HomeScreen extends StatelessWidget {
                   'Join intimate, closed, or open communities tailored to your interests',
               color: Colors.blue,
               onTap: () {
-                onTabSelected(1); // Navigate to the Communities tab
+                widget.onTabSelected(1); 
               },
             ),
             const SizedBox(height: 16),
@@ -82,7 +147,7 @@ class HomeScreen extends StatelessWidget {
                   'Discover campus events, create activities, and manage RSVPs',
               color: Colors.green,
               onTap: () {
-                onTabSelected(2); // Navigate to the Events tab
+                widget.onTabSelected(2); 
               },
             ),
             const SizedBox(height: 16),
@@ -94,7 +159,7 @@ class HomeScreen extends StatelessWidget {
                   'Engage in meaningful conversations with your community',
               color: Colors.purple,
               onTap: () {
-                onTabSelected(1); // Navigate to the communities tab.
+                widget.onTabSelected(1); 
               },
             ),
             const SizedBox(height: 16),
@@ -106,7 +171,7 @@ class HomeScreen extends StatelessWidget {
                   'Build your network and stay connected with classmates',
               color: Colors.orange,
               onTap: () {
-                onTabSelected(3); // Navigate to the Profile tab.
+                widget.onTabSelected(3); 
               },
             ),
             const SizedBox(height: 32),
@@ -134,7 +199,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 20),
                     FilledButton(
                       onPressed: () {
-                        onTabSelected(1); // Navigate to the Communities tab
+                        widget.onTabSelected(1); 
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
@@ -147,7 +212,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: () {
-                        onTabSelected(2); // Navigate to the Events tab
+                        widget.onTabSelected(2); 
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(
@@ -164,6 +229,110 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCalendarSection() {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    final eventsOnSelectedDate = _getEventsOnSelectedDate();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TableCalendar<Event>(
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2030, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+              eventLoader: _getEventsForDay,
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _selectedDate = selectedDay;
+                  _focusedDay = focusedDay;
+                });
+              },
+              calendarStyle: CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                markerDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false, 
+                titleCentered: true,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+         if (eventsOnSelectedDate.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.0),
+            child: Text(
+              'No events scheduled for this date.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          )
+        else
+          ...eventsOnSelectedDate.map((event) => Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Icon(Icons.event, color: Theme.of(context).colorScheme.primary),
+              title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${event.time} • ${event.location}'),
+                  const SizedBox(height: 4),
+                  Text(
+                    event.communityName,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              isThreeLine: true, // give more room
+              
+              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+              
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    // Navigate to the EventsScreen using the communityId and communityName from the event.
+                    builder: (context) => EventsScreen(
+                      communityId: event.communityId,
+                      communityName: event.communityName,
+                    ),
+                  ),
+                );
+              },
+            ),
+          )),
+      ],
     );
   }
 
