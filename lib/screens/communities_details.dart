@@ -4,6 +4,9 @@ import 'package:plannus/models/community.dart';
 import 'package:plannus/services/community_service.dart';
 import 'package:plannus/models/events.dart';
 import 'package:plannus/services/event_service.dart';
+import 'package:plannus/models/post.dart';
+import 'package:plannus/services/post_service.dart';
+import 'package:plannus/screens/post_details.dart';
 
 
 class CommunityDetailScreen extends StatefulWidget {
@@ -19,7 +22,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
+  // Text boxes
   final TextEditingController _postController = TextEditingController();
+  final TextEditingController _postTitleController = TextEditingController();
   final TextEditingController _eventTitleController = TextEditingController();
   final TextEditingController _eventDateController = TextEditingController();
   final TextEditingController _eventTimeController = TextEditingController();
@@ -27,8 +32,10 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   final TextEditingController _eventLocationController = TextEditingController();
   final TextEditingController _eventDescriptionController = TextEditingController();
 
+  // Services
   final EventService _eventService = EventService();
   final CommunityService _communityService = CommunityService();
+  final PostService _postService = PostService();
 
   // State variables for events
   List<Event> _events = [];
@@ -38,6 +45,11 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   // State variables for event creation dialog
   bool _isCreating = false;
   String? _dialogError;
+
+  // State variables for posts
+  List<Post> _posts = [];
+  bool _isLoadingPosts = true;
+  bool _isPosting = false;
 
   // State variables for members
   List<Map<String, dynamic>> _members = [];
@@ -70,7 +82,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     _currentRole = widget.community.currentUserRole;
     
     _loadEvents(); 
-    _loadMembers(); 
+    _loadMembers();
+    _loadPosts(); 
 
     if (_canEdit) {
       _loadPendingRequests(); // Fetch the waitlist if they are an admin
@@ -190,77 +203,59 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Widget _buildDiscussionsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Create a Post',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+    return RefreshIndicator(
+      onRefresh: _loadPosts,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Create a Post', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _postTitleController,
+                    decoration: const InputDecoration(hintText: 'Discussion Title'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _postController,
-                  decoration: const InputDecoration(
-                    hintText: 'Share your thoughts with the community...',
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _postController,
+                    decoration: const InputDecoration(hintText: 'Share your thoughts with the community!'),
+                    maxLines: 8,
                   ),
-                  maxLines: 4,
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      _postController.clear();
-                    },
-                    icon: const Icon(Icons.send),
-                    label: const Text('Post'),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _isPosting ? null : _handleCreatePost,
+                      icon: _isPosting 
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                          : const Icon(Icons.send),
+                      label: const Text('Post'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Recent Discussions',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildPostCard(
-          author: 'Alice Tan',
-          content: 'Hey everyone! What did you all think about the lecture today?',
-          timestamp: '2 hours ago',
-          replies: 5,
-        ),
-        const SizedBox(height: 12),
-        _buildPostCard(
-          author: 'Bob Chen',
-          content:
-              'Anyone up for a study session this weekend? We can cover chapters 5-7.',
-          timestamp: '5 hours ago',
-          replies: 12,
-        ),
-        const SizedBox(height: 12),
-        _buildPostCard(
-          author: 'Clara Wong',
-          content:
-              'Just finished the assignment! Happy to help if anyone has questions.',
-          timestamp: '1 day ago',
-          replies: 8,
-        ),
-      ],
+          const SizedBox(height: 16),
+          const Text('Recent Discussions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          
+          if (_isLoadingPosts)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+          else if (_posts.isEmpty)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No discussions yet. Be the first to post!')))
+          else
+            ..._posts.map((post) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildPostCard(post),
+                )),
+        ],
+      ),
     );
   }
 
@@ -449,59 +444,57 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
   }
 
-  Widget _buildPostCard({
-    required String author,
-    required String content,
-    required String timestamp,
-    required int replies,
-  }) {
+  Widget _buildPostCard(Post post) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  child: Text(author.substring(0, 1)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        author,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
+      clipBehavior: Clip.antiAlias, 
+      child: InkWell(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
+          );
+          _loadPosts(); 
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(child: Text(post.creatorName[0])),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(post.creatorName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          _formatTimeAgo(post.createdAt),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
-                      ),
-                      Text(
-                        timestamp,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (_canEdit)
-                  IconButton(
-                    icon: const Icon(Icons.flag, size: 20),
-                    onPressed: () {},
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(content),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () {},
-              child: Text('$replies Replies'),
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              Text(
+                post.title, 
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(height: 8),
+              
+              Text(post.content),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: null, 
+                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                label: Text('${post.repliesCount} Replies'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -531,6 +524,22 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         _eventsError = error.toString();
         _isLoadingEvents = false;
       });
+    }
+  }
+
+  Future<void> _loadPosts() async {
+    setState(() => _isLoadingPosts = true);
+    try {
+      final posts = await _postService.fetchCommunityPosts(widget.community.id);
+      if (!mounted) return;
+      setState(() {
+        _posts = posts;
+        _isLoadingPosts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingPosts = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load posts: $e')));
     }
   }
 
@@ -582,6 +591,44 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         SnackBar(content: Text('Failed to join: $e')),
       );
     }
+  }
+
+  Future<void> _handleCreatePost() async {
+    final title = _postTitleController.text.trim();
+    final content = _postController.text.trim();
+    
+    if (title.isEmpty || content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in the title and content for the post.'))
+      );
+      return;
+    }
+
+    setState(() => _isPosting = true);
+    try {
+      // create the post using service
+      await _postService.createPost(widget.community.id, title, content);
+      
+      // clear the text
+      _postTitleController.clear();
+      _postController.clear();
+
+      FocusScope.of(context).unfocus(); 
+      // force refresh the posts list to show the new post
+      await _loadPosts();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to post: $e')));
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
+    }
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 0) return '${difference.inDays}d ago';
+    if (difference.inHours > 0) return '${difference.inHours}h ago';
+    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
+    return 'Just now';
   }
 
   // Confirm and remove a member from the community.
