@@ -1,8 +1,9 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:plannus/services/friend_service.dart';
+import 'package:plannus/screens/chat_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -14,35 +15,34 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
-  
-  // State variables to hold the user's profile data and loading state
-  Map<String, dynamic>? _profileData;
-  bool _isLoadingProfile = true;
 
-  bool _isLoadingCalendar = true;
-  bool _isImportingNusMods = false;
-
+  // Tab controller for the tabs: Friends, Calendar, Settings
   late TabController _tabController;
-  String _searchQuery = '';
 
+  // Text boxes
   late final TextEditingController _nameController;
   late final TextEditingController _schoolController;
   late final TextEditingController _majorController;
   late final TextEditingController _yearController;
   late final TextEditingController _nusModsLinkController;
+  
+  // State variables to hold the user's profile data and loading state
+  Map<String, dynamic>? _profileData;
+  bool _isLoadingProfile = true;
 
+  // State variables for the calendar tab
   String _selectedAcadYear = '2026-2027'; // Default academic year for the calendar tab
   int _selectedSemester = 1; // Default semester for the calendar tab
   List<Map<String, dynamic>> _personalCalendarEvents = []; // List to hold personal calendar events fetched from Supabase
-
-  // Change to Supabase data fetching in the future.
-  final List<Map<String, String>> _friends = [
-    {'name': 'Alice Tan', 'major': 'Computer Science', 'year': 'Year 3'},
-    {'name': 'Bob Chen', 'major': 'Business Analytics', 'year': 'Year 2'},
-    {'name': 'Clara Wong', 'major': 'Engineering', 'year': 'Year 4'},
-    {'name': 'David Lim', 'major': 'Medicine', 'year': 'Year 1'},
-    {'name': 'Emma Koh', 'major': 'Law', 'year': 'Year 3'},
-  ];
+  bool _isLoadingCalendar = true;
+  bool _isImportingNusMods = false;
+  
+  // State variables for the friends tab
+  final FriendService _friendService = FriendService();
+  List<Map<String, dynamic>> _acceptedFriends = [];
+  List<Map<String, dynamic>> _pendingRequests = [];
+  bool _isLoadingFriends = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -59,6 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     // Trigger the database fetch
     _fetchProfileData();
     _fetchPersonalCalendarEvents();
+    _fetchFriendsData();
   }
 
   // Fetch the user's profile data from Supabase and populate the state variables and controllers. 
@@ -137,20 +138,41 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       );
     }
   }
-// Function to get initials from the user's name for the avatar, used for the CircleAvatar in the Profile tab. If name not available, return '?'.
-String _getInitials() {
-  if (_profileData == null) return '?';
 
-  String firstName = _profileData!['first_name'] ?? '';
-  String lastName = _profileData!['last_name'] ?? '';
-    
-  if (firstName.isNotEmpty && lastName.isNotEmpty) {
-    return '${firstName[0]}${lastName[0]}'.toUpperCase();
-  } else if (firstName.isNotEmpty) {
-    return firstName[0].toUpperCase();
+  Future<void> _fetchFriendsData() async {
+    setState(() => _isLoadingFriends = true);
+    try {
+      final friends = await _friendService.fetchFriends();
+      final pending = await _friendService.fetchPendingRequests();
+      
+      if (mounted) {
+        setState(() {
+          _acceptedFriends = friends;
+          _pendingRequests = pending;
+          _isLoadingFriends = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingFriends = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading friends: $e')));
+      }
+    }
   }
-  return '?';
-}
+  // Function to get initials from the user's name for the avatar, used for the CircleAvatar in the Profile tab. If name not available, return '?'.
+  String _getInitials() {
+    if (_profileData == null) return '?';
+
+    String firstName = _profileData!['first_name'] ?? '';
+    String lastName = _profileData!['last_name'] ?? '';
+      
+    if (firstName.isNotEmpty && lastName.isNotEmpty) {
+      return '${firstName[0]}${lastName[0]}'.toUpperCase();
+    } else if (firstName.isNotEmpty) {
+      return firstName[0].toUpperCase();
+    }
+    return '?';
+  }
 
   @override
   void dispose() {
@@ -250,75 +272,286 @@ String _getInitials() {
   }
 
   Widget _buildFriendsTab() {
-    final filteredFriends = _friends
-        .where((friend) =>
-            friend['name']!.toLowerCase().contains(_searchQuery.toLowerCase()))
-        .toList();
+    if (_isLoadingFriends) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Friends (${_friends.length})',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+    final filteredFriends = _acceptedFriends.where((friend) {
+      final name = (friend['user_name'] ?? '${friend['first_name']} ${friend['last_name']}').toLowerCase();
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _fetchFriendsData, // Allows users to pull-to-refresh
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Header Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'My Friends (${_acceptedFriends.length})',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        const Text('Manage connections'),
-                      ],
-                    ),
-                    FilledButton.icon(
-                      onPressed: _showAddFriendDialog,
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Add'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search friends...',
-                    prefixIcon: Icon(Icons.search),
+                          const Text('Manage connections'),
+                        ],
+                      ),
+                      FilledButton.icon(
+                        onPressed: _showAddFriendDialog,
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Add'),
+                      ),
+                    ],
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    decoration: const InputDecoration(
+                      hintText: 'Search friends...',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        ...filteredFriends.map((friend) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  child: Text(friend['name']!.substring(0, 1)),
+          const SizedBox(height: 16),
+
+          // Pending Requests Section
+          if (_pendingRequests.isNotEmpty) ...[
+            const Text(
+              'Pending Requests',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+            ),
+            const SizedBox(height: 8),
+            ..._pendingRequests.map((request) {
+              final name = request['user_name'] ?? '${request['first_name']} ${request['last_name']}';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: ListTile(
+                  leading: CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${request['major'] ?? 'Unknown'} • ${request['year_of_study'] ?? ''}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Reject Button
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.red),
+                        onPressed: () async {
+                          await _friendService.rejectFriendRequest(request['id']);
+                          _fetchFriendsData();
+                        },
+                      ),
+                      // Accept Button
+                      IconButton(
+                        icon: const Icon(Icons.check, color: Colors.green),
+                        style: IconButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.1)),
+                        onPressed: () async {
+                          await _friendService.acceptFriendRequest(request['id']);
+                          _fetchFriendsData();
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                title: Text(friend['name']!),
-                subtitle: Text('${friend['major']} • ${friend['year']}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () {},
-                ),
+              );
+            }),
+            const Divider(height: 32),
+          ],
+
+          // Accepted Friends Section
+          if (filteredFriends.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Text('No friends yet. Send a friend request to start chatting!', style: TextStyle(fontStyle: FontStyle.italic)),
               ),
-            )),
-      ],
+            )
+          else
+            ...filteredFriends.map((friend) {
+              final name = friend['user_name'] ?? '${friend['first_name']} ${friend['last_name']}';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${friend['major'] ?? 'Unknown'} • ${friend['year_of_study'] ?? ''}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            friendId: friend['id'],
+                            friendName: name,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  void _showAddFriendDialog() {
+    final TextEditingController searchController = TextEditingController();
+    
+    // State variables for the dialog
+    List<Map<String, dynamic>> searchResults = [];
+    bool isSearching = false;
+    bool hasSearched = false;
+    Set<String> sentRequests = {}; // Tracks who the user just added to show a checkmark
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          
+          // Helper function to trigger the search
+          Future<void> performSearch() async {
+            final query = searchController.text.trim();
+            if (query.isEmpty) return;
+
+            setDialogState(() {
+              isSearching = true;
+              hasSearched = true;
+            });
+
+            try {
+              final results = await _friendService.searchUsers(query);
+              setDialogState(() {
+                searchResults = results;
+                isSearching = false;
+              });
+            } catch (e) {
+              setDialogState(() => isSearching = false);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error searching: $e')),
+                );
+              }
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Add a Friend'),
+            content: SizedBox(
+              width: double.maxFinite, // Required for ListView inside Dialog
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search Email or Username',
+                      hintText: 'e0123456@u.nus.edu or User123',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: performSearch,
+                      ),
+                    ),
+                    onSubmitted: (_) => performSearch(),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // show loading indicator, no results, or the list of results
+                  if (isSearching)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    )
+                  else if (hasSearched && searchResults.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('No users found.', style: TextStyle(fontStyle: FontStyle.italic)),
+                    )
+                  else
+                    // List of Results
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: searchResults.length,
+                        itemBuilder: (context, index) {
+                          final user = searchResults[index];
+                          final userId = user['id'];
+                          
+                          // Fallback to first/last name if username isn't set yet
+                          final name = (user['user_name'] != null && user['user_name'].isNotEmpty) 
+                              ? user['user_name'] 
+                              : '${user['first_name']} ${user['last_name']}';
+                              
+                          final hasSent = sentRequests.contains(userId);
+
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                              )
+                            ),
+                            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${user['major'] ?? 'Unknown'} • ${user['year_of_study'] ?? ''}'),
+                            trailing: hasSent
+                                ? const Icon(Icons.check_circle, color: Colors.green) // Show success checkmark
+                                : IconButton(
+                                    icon: const Icon(Icons.person_add),
+                                    onPressed: () async {
+                                      try {
+                                        await _friendService.sendFriendRequestById(userId);
+                                        
+                                        // Instantly update UI to show checkmark
+                                        setDialogState(() => sentRequests.add(userId));
+                                        
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Request sent to $name!'))
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')))
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                          );
+                        }
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        }
+      ),
     );
   }
 
@@ -639,7 +872,7 @@ String _getInitials() {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<int>(
-                      value: semester,
+                      initialValue: semester,
                       decoration: const InputDecoration(
                         labelText: 'Semester',
                         border: OutlineInputBorder(),
@@ -1242,30 +1475,5 @@ String _getInitials() {
     final minute = dateTime.minute.toString().padLeft(2, '0');
 
     return '$hour:$minute';
-  }
-
-  void _showAddFriendDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add a Friend'),
-        content: const TextField(
-          decoration: InputDecoration(
-            labelText: 'Email Address',
-            hintText: 'friend@u.nus.edu',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Send Request'),
-          ),
-        ],
-      ),
-    );
   }
 }
