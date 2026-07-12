@@ -34,18 +34,18 @@ To run the app, download the .apk file from the ["Release"](https://github.com/y
 
 ## Features TO-DO
 1. Setup friends feature 
-    * Suggested friends feature (extra point, can look to use AI?)
-    * Can look to add friends chat?
-    * Online feature? Any profile circled in green means online.
+    * Suggested friends feature (extra point, can look to use AI?) ✅
+    * Can look to add friends chat? ✅
+    * Online feature? Any profile circled in green means online. 
 
 2. Discussions in Communities
-    * Posts in discussions
-    * Screen for writing replies or posting pics etc.
+    * Posts in discussions ✅
+    * Screen for writing replies ✅ or posting pics ❌ (not yet), etc. 
     * Report feature available for Discussions in open communties. Admin then can see report and deem what action is best (less impt)
     
 3. Profiles Tab
-    * Personal Calender should be like the one in events. Tutorials etc. 
-        * Can maybe look to move/copy the Personal Calender to the home page, so that it does not look to baron and empty. 
-    * Can look to use NUSMods API to import classes to fill up personal calender.
-    * Events should also show up here.
+    * Personal Calender should be like the one in events. Tutorials etc. ✅
+        * Can maybe look to move/copy the Personal Calender to the home page, so that it does not look to baron and empty. ✅
+    * Can look to use NUSMods API to import classes to fill up personal calender. ✅
+    * Events should also show up here. ✅
     * Settings feature should work. Push notifications etc. Can look to try to add notification settings to events (reminders).
