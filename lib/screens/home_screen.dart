@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:plannus/models/events.dart';
 import 'package:plannus/services/event_service.dart';
@@ -19,7 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
   
-  List<Event> _events = [];
+  List<CalendarItem> _allEvents = [];
   bool _isLoading = true;
 
   @override
@@ -28,34 +29,61 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadUserEvents();
   }
 
-  // Fetch only the events the user has registered for to display on home page calender.
+  // Loads both personal and community events for the current user and combines them into a unified list.
   Future<void> _loadUserEvents() async {
     setState(() => _isLoading = true);
     try {
-      final events = await _eventService.fetchRegisteredEventsForCurrentUser();
+      final currentUserId = Supabase.instance.client.auth.currentUser!.id;
+
+      // 1. Fetch Personal Events (Classes, Manual Entries)
+      final personalData = await Supabase.instance.client
+          .from('personal_calendar_events')
+          .select()
+          .eq('user_id', currentUserId);
+
+      // 2. Fetch Community Events (RSVPs)
+      final communityEvents = await _eventService.fetchRegisteredEventsForCurrentUser();
+
+      // 3. Combine them into our Unified Wrapper
+      List<CalendarItem> combined = [];
+      
+      for (var ce in communityEvents) {
+        combined.add(CalendarItem.community(ce));
+      }
+      for (var pe in personalData) {
+        combined.add(CalendarItem.personal(pe));
+      }
+
       if (mounted) {
         setState(() {
-          _events = events;
+          _allEvents = combined;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); // for debug error.
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
-  List<Event> _getEventsForDay(DateTime day) {
-    return _events.where((event) =>
-        event.date.year == day.year &&
-        event.date.month == day.month &&
-        event.date.day == day.day).toList();
+  List<CalendarItem> _getEventsForDay(DateTime day) {
+    return _allEvents.where((item) =>
+        item.date.year == day.year &&
+        item.date.month == day.month &&
+        item.date.day == day.day).toList();
   }
 
-  List<Event> _getEventsOnSelectedDate() {
+  List<CalendarItem> _getEventsOnSelectedDate() {
     return _getEventsForDay(_selectedDate);
+  }
+
+  // Helper function to format time for personal events
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   @override
@@ -126,6 +154,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCalendarSection(),
+            const SizedBox(height: 32),
+            // Calender Section
+            const Text(
+              'Discover More!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 32),
             _buildFeatureCard(
               context,
@@ -251,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.all(8.0),
-            child: TableCalendar<Event>(
+            child: TableCalendar<CalendarItem>(
               firstDay: DateTime.utc(2020, 1, 1),
               lastDay: DateTime.utc(2030, 12, 31),
               focusedDay: _focusedDay,
@@ -295,43 +332,85 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )
         else
-          ...eventsOnSelectedDate.map((event) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Icon(Icons.event, color: Theme.of(context).colorScheme.primary),
-              title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${event.time} • ${event.location}'),
-                  const SizedBox(height: 4),
-                  Text(
-                    event.communityName,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              isThreeLine: true, // give more room
+          ...eventsOnSelectedDate.map((item) {
+            
+            // for personal events, we need to parse the start and end times and display them in a readable format.
+            if (item.isPersonal) {
+              final pe = item.personalEvent!;
+              final startAt = DateTime.parse(pe['start_at']).toLocal();
+              final endAt = DateTime.parse(pe['end_at']).toLocal();
+              final title = pe['title'] ?? 'Busy';
+              final venue = pe['venue'];
+              final source = pe['source'];
               
-              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-              
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    // Navigate to the EventsScreen using the communityId and communityName from the event.
-                    builder: (context) => EventsScreen(
-                      communityId: event.communityId,
-                      communityName: event.communityName,
-                    ),
+              final timeString = '${_formatTime(startAt)} - ${_formatTime(endAt)}';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: Icon(
+                    source == 'nusmods' ? Icons.school : Icons.person, 
+                    color: Colors.orange
                   ),
-                );
-              },
-            ),
-          )),
+                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(venue != null && venue.toString().isNotEmpty ? '$timeString • $venue' : timeString),
+                      const SizedBox(height: 4),
+                      Text(
+                        source == 'nusmods' ? 'NUSMods Class' : 'Personal Event',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  isThreeLine: true,
+                ),
+              );
+            } 
+            
+            // standard UI for community events
+            else {
+              final event = item.communityEvent!;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: Icon(Icons.event, color: Theme.of(context).colorScheme.primary),
+                  title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${event.time} • ${event.location}'),
+                      const SizedBox(height: 4),
+                      Text(
+                        event.communityName,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  isThreeLine: true,
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EventsScreen(
+                          communityId: event.communityId,
+                          communityName: event.communityName,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }
+          }),
       ],
     );
   }
@@ -386,4 +465,22 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+// Helper class to combine the Community Events and Personal Events.
+class CalendarItem {
+  final bool isPersonal;
+  final Event? communityEvent;
+  final Map<String, dynamic>? personalEvent;
+  final DateTime date;
+
+  CalendarItem.community(this.communityEvent)
+      : isPersonal = false,
+        personalEvent = null,
+        date = communityEvent!.date;
+
+  CalendarItem.personal(this.personalEvent)
+      : isPersonal = true,
+        communityEvent = null,
+        date = DateTime.parse(personalEvent!['start_at']).toLocal();
 }

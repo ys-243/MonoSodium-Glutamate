@@ -27,6 +27,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late final TextEditingController _yearController;
   late final TextEditingController _nusModsLinkController;
   
+  // For manual adding of events.
+  late final TextEditingController _manualTitleController;
+  late final TextEditingController _manualVenueController;
+  late final TextEditingController _manualDateController;
+  late final TextEditingController _manualStartTimeController;
+  late final TextEditingController _manualEndTimeController;
+  bool _isCreatingManualEvent = false;
+  String? _manualEventDialogError;
+  
   // State variables to hold the user's profile data and loading state
   Map<String, dynamic>? _profileData;
   bool _isLoadingProfile = true;
@@ -56,6 +65,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _majorController = TextEditingController();
     _yearController = TextEditingController();
     _nusModsLinkController = TextEditingController();
+    _manualTitleController = TextEditingController();
+    _manualVenueController = TextEditingController(); 
+    _manualDateController = TextEditingController();
+    _manualStartTimeController = TextEditingController();
+    _manualEndTimeController = TextEditingController();
 
     // Trigger the database fetch
     _fetchProfileData();
@@ -183,6 +197,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _majorController.dispose();
     _yearController.dispose();
     _nusModsLinkController.dispose();
+    _manualTitleController.dispose();
+    _manualVenueController.dispose();
+    _manualDateController.dispose();
+    _manualStartTimeController.dispose();
+    _manualEndTimeController.dispose();
     super.dispose();
   }
 
@@ -195,7 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           controller: _tabController,
           tabs: const [
             Tab(text: 'Friends'),
-            Tab(text: 'Calendar'),
+            Tab(text: 'Personal Calendar'),
             Tab(text: 'Settings'),
           ],
         ),
@@ -575,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ),
           ),
           const SizedBox(height: 8),
-          const Text('Your upcoming events and commitments'),
+          const Text('Add your classes and other external events here!'),
           const SizedBox(height: 16),
           
           Card(
@@ -593,6 +612,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   )
                 : const Icon(Icons.chevron_right),
               onTap: _isImportingNusMods ? null : _showNusModsImportDialog, 
+            ),
+          ),
+
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.edit_calendar),
+              title: const Text('Add Event Manually'),
+              subtitle: const Text('Create a custom event on your calendar'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _showAddManualEventDialog,
             ),
           ),
 
@@ -623,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Import your NUSMods timetable',
+                      'Import your NUSMods timetable or add events manually.',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -1467,6 +1496,269 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
+  void _showAddManualEventDialog() {
+    // Clear controllers when opening a fresh dialog
+    _manualTitleController.clear();
+    _manualVenueController.clear();
+    _manualDateController.clear();
+    _manualStartTimeController.clear();
+    _manualEndTimeController.clear();
+
+    // Reset the dialog state variables
+    _manualEventDialogError = null;
+    _isCreatingManualEvent = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevents accidental dismissal while loading
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          return AlertDialog(
+            title: const Text('Add Personal Event'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // --- Error Message Display ---
+                  if (_manualEventDialogError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _manualEventDialogError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // FORM FIELDS 
+                  TextField(
+                    controller: _manualTitleController,
+                    decoration: const InputDecoration(labelText: 'Event Title'),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  TextField(
+                    controller: _manualDateController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      hintText: 'DD-MM-YYYY',
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    onTap: () async {
+                      final DateTime? pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(), 
+                        lastDate: DateTime(2100),
+                      );
+
+                      if (pickedDate != null) {
+                        final String day = pickedDate.day.toString().padLeft(2, '0');
+                        final String month = pickedDate.month.toString().padLeft(2, '0');
+                        final String year = pickedDate.year.toString();
+                        _manualDateController.text = '$day-$month-$year';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _manualStartTimeController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Start Time',
+                      hintText: 'HH:MM',
+                      suffixIcon: const Icon(Icons.access_time),
+                    ),
+                    onTap: () async {
+                      final TimeOfDay? pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                      );
+                      if (pickedTime != null) {
+                        final String hour = pickedTime.hour.toString().padLeft(2, '0');
+                        final String minute = pickedTime.minute.toString().padLeft(2, '0');
+                        _manualStartTimeController.text = '$hour:$minute';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _manualEndTimeController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'End Time',
+                      hintText: 'HH:MM',
+                      suffixIcon: const Icon(Icons.access_time_filled),
+                    ),
+                    onTap: () async {
+                      TimeOfDay initialEndTime = TimeOfDay.now();
+                      if (_manualStartTimeController.text.isNotEmpty) {
+                        final parts = _manualStartTimeController.text.split(':');
+                        if (parts.length == 2) {
+                           initialEndTime = TimeOfDay(
+                             hour: int.tryParse(parts[0]) ?? initialEndTime.hour, 
+                             minute: int.tryParse(parts[1]) ?? initialEndTime.minute
+                           );
+                        }
+                      }
+                      final TimeOfDay? pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: initialEndTime,
+                      );
+                      if (pickedTime != null) {
+                        final String hour = pickedTime.hour.toString().padLeft(2, '0');
+                        final String minute = pickedTime.minute.toString().padLeft(2, '0');
+                        _manualEndTimeController.text = '$hour:$minute';
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _manualVenueController,
+                    decoration: const InputDecoration(labelText: 'Venue (Optional)'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isCreatingManualEvent ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: _isCreatingManualEvent ? null : () => _handleManualEventSubmission(dialogContext, setDialogState),
+                child: _isCreatingManualEvent 
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Create'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+  
+  Future<void> _handleManualEventSubmission(BuildContext dialogContext, StateSetter setDialogState) async {
+    // Same as community event checks.
+    // 1. Empty field check
+    if (_manualTitleController.text.trim().isEmpty || 
+        _manualDateController.text.isEmpty ||
+        _manualStartTimeController.text.isEmpty ||
+        _manualEndTimeController.text.isEmpty) {
+      setDialogState(() => _manualEventDialogError = 'Please fill in all required fields.');
+      return;
+    }
+
+    // 2. Date Validation: Date must be in the future and in correct format (DD-MM-YYYY)
+    final dateParts = _manualDateController.text.split('-');
+    DateTime? parsedDate;
+    if (dateParts.length == 3) {
+      final day = int.tryParse(dateParts[0]);
+      final month = int.tryParse(dateParts[1]);
+      final year = int.tryParse(dateParts[2]);
+      
+      if (day != null && month != null && year != null) {
+        parsedDate = DateTime(year, month, day);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+
+        if (parsedDate.isBefore(today)) {
+          setDialogState(() => _manualEventDialogError = 'Event date cannot be in the past.');
+          return;
+        }
+      }
+    }
+    
+    if (parsedDate == null) {
+       setDialogState(() => _manualEventDialogError = 'Invalid date format.');
+       return;
+    }
+
+    // 3. Time Validation: End time must be after start time
+    final startTime = _parseTime(_manualStartTimeController.text);
+    final endTime = _parseTime(_manualEndTimeController.text);
+
+    if (startTime != null && endTime != null) {
+      if (endTime.hour < startTime.hour || 
+         (endTime.hour == startTime.hour && endTime.minute <= startTime.minute)) {
+        setDialogState(() => _manualEventDialogError = 'End time must be after start time.');
+        return;
+      }
+    } else {
+       setDialogState(() => _manualEventDialogError = 'Invalid time format.');
+       return;
+    }
+
+    // If all ok, show spinner and send to Supabase
+    setDialogState(() {
+      _manualEventDialogError = null;
+      _isCreatingManualEvent = true;
+    });
+
+    try {
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser == null) throw Exception('User not logged in');
+
+      final startDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, startTime.hour, startTime.minute);
+      final endDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, endTime.hour, endTime.minute);
+
+      await Supabase.instance.client.from('personal_calendar_events').insert({
+        'user_id': currentUser.id,
+        'title': _manualTitleController.text.trim(),
+        'source': 'manual',
+        'venue': _manualVenueController.text.trim().isNotEmpty ? _manualVenueController.text.trim() : null,
+        'start_at': startDateTime.toUtc().toIso8601String(),
+        'end_at': endDateTime.toUtc().toIso8601String(),
+        'is_busy': true,
+        'visibility': 'busy_only',
+      });
+
+      if (!mounted) return;
+      
+      Navigator.pop(dialogContext);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Personal event created successfully.')),
+      );
+      
+      // Refresh the calendar view
+      await _fetchPersonalCalendarEvents();
+      
+    } catch (error) {
+      // If creation fails, stop loading spinner and show error
+      setDialogState(() {
+        _manualEventDialogError = 'Failed to create event: $error';
+        _isCreatingManualEvent = false;
+      });
+    }
+  }
+
   Future<void> _deletePersonalCalendarEvent(String eventId) async {
     try {
       await Supabase.instance.client
@@ -1557,5 +1849,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final minute = dateTime.minute.toString().padLeft(2, '0');
 
     return '$hour:$minute';
+  }
+
+  TimeOfDay? _parseTime(String timeText) {
+    final parts = timeText.split(':');
+    if (parts.length != 2) return null;
+    
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    
+    return TimeOfDay(hour: hour, minute: minute);
   }
 }
