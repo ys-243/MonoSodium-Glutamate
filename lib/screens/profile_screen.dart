@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/services/friend_service.dart';
 import 'package:plannus/screens/chat_screen.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -555,7 +556,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+
   Widget _buildCalendarTab() {
+    final selectedDayEvents = _getEventsForDay(_selectedDay);
+
     return RefreshIndicator(
       onRefresh: _fetchPersonalCalendarEvents,
       child: ListView(
@@ -625,12 +631,88 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
             )
           else 
-            ..._personalCalendarEvents.map(
-              (event) => _buildCalendarEventCard(event),
+            TableCalendar<Map<String, dynamic>>(
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2030, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              eventLoader: _getEventsForDay,
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _selectedDay = selectedDay;
+                  _focusedDay = focusedDay;
+                });
+              },
+              
+              onPageChanged: (focusedDay) {
+                _focusedDay = focusedDay;
+              },
+              
+              calendarFormat: CalendarFormat.month,
+
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false, 
+                titleCentered: true,
+              ),
             ),
+
+            const SizedBox(height: 20),
+
+            Text(
+              _formatSelectedDayHeading(_selectedDay),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            if (selectedDayEvents.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.event_busy,
+                        size:40,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No events on this day.',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Import your NUSMods timetable or add events manually.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...selectedDayEvents.map((event) => _buildCalendarEventCard(event)
+          ),
         ],
       ),
     );
+  }
+
+  String _formatSelectedDayHeading(DateTime date) {
+    return '${_formatCalendarDate(date)} ${date.year}';
+  }
+
+  List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
+    return _personalCalendarEvents.where((event) {
+      final startAt = DateTime.parse(event['start_at']).toLocal();
+
+      return startAt.year == day.year &&
+          startAt.month == day.month &&
+          startAt.day == day.day;
+    }).toList();
   }
 
   Widget _buildCalendarEventCard(Map<String, dynamic> event) {
