@@ -5,9 +5,15 @@ import 'events_screen.dart';
 import 'profile_screen.dart';
 import 'login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:plannus/theme_controller.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final ThemeController themeController;
+
+  const MainScreen({
+    super.key,
+    required this.themeController,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -35,11 +41,12 @@ class _MainScreenState extends State<MainScreen> {
       const CommunitiesScreen(),
       const EventsScreen(), // new logic handles the separation natively, so we show the EventsScreen here without any parameters.
       ProfileScreen(
+        themeController: widget.themeController,
         onLogout: () async {
           await Supabase.instance.client.auth.signOut();
           if (!mounted) return;
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            MaterialPageRoute(builder: (_) => LoginScreen(themeController: widget.themeController)),
             (route) => false,
           );
         },

@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/screens/login_screen.dart';
-import 'package:plannus/screens/main_screen.dart'; 
+import 'package:plannus/screens/main_screen.dart';
+import 'package:plannus/theme_controller.dart'; 
 
 class ProfileSetupScreen extends StatefulWidget {
-  const ProfileSetupScreen({super.key});
+  const ProfileSetupScreen({
+    super.key,
+    required this.themeController
+  });
+
+  final ThemeController themeController;
 
   @override
   State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
@@ -74,7 +80,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (!mounted) return;
       // Profile is saved! Now we can safely send them to the main app.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainScreen()),
+        MaterialPageRoute(builder: (_) => MainScreen(themeController: widget.themeController)),
       );
     // Shpow errors if any.
     } catch (e) {
@@ -95,7 +101,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ? null
               : () {
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute(builder: (_) => LoginScreen(themeController: widget.themeController)),
                     (route) => false,
                   );
                 },

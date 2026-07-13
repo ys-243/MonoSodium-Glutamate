@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_setup_screen.dart';
+import 'package:plannus/theme_controller.dart';
 
 class RegisterScreen extends StatefulWidget {
-	const RegisterScreen({super.key});
+	const RegisterScreen({
+    super.key,
+    required this.themeController,
+  });
+  final ThemeController themeController;
 
 	@override
 	State<RegisterScreen> createState() => _RegisterScreenState();
@@ -43,7 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 			);
 			Navigator.of(context).pushReplacement(
 				MaterialPageRoute(
-					builder: (_) => const ProfileSetupScreen(),
+					builder: (_) => ProfileSetupScreen(themeController: widget.themeController),
 				),
 			);
 		} on AuthException catch (e) {

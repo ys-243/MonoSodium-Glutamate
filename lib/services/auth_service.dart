@@ -3,9 +3,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/screens/login_screen.dart';
 import 'package:plannus/screens/main_screen.dart';
 import 'package:plannus/screens/profile_setup_screen.dart';
+import 'package:plannus/theme_controller.dart';
 
 class AuthService extends StatelessWidget {
-  const AuthService({super.key});
+  final ThemeController themeController;
+
+  const AuthService({
+    super.key,
+    required this.themeController,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +23,7 @@ class AuthService extends StatelessWidget {
 
         // If there is no active session, show the Login/Register flow
         if (session == null) {
-          return const LoginScreen();
+          return LoginScreen(themeController: themeController);
         }
 
         // If there is a session, check if their profile exists in the database
@@ -39,11 +45,11 @@ class AuthService extends StatelessWidget {
 
             // If no profile row is found, divert them the Setup Screen to setup profile.
             if (profileSnapshot.data == null) {
-              return const ProfileSetupScreen();
+              return ProfileSetupScreen(themeController: themeController);
             }
 
             // If a profile is found, go to the Main Screen
-            return const MainScreen();
+            return MainScreen(themeController: themeController);
           },
         );
       },

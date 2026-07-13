@@ -5,11 +5,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/services/friend_service.dart';
 import 'package:plannus/screens/chat_screen.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:plannus/theme_controller.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
+  final ThemeController themeController;
 
-  const ProfileScreen({super.key, required this.onLogout});
+  const ProfileScreen({
+    super.key,
+    required this.onLogout,
+    required this.themeController,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -207,6 +213,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
@@ -221,53 +230,83 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
       body: Column(
         children: [
+          // Profile information header
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(20),
+            color: colorScheme.surfaceContainerLow,
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 40,
+                  backgroundColor: colorScheme.primaryContainer,
+                  foregroundColor: colorScheme.onPrimaryContainer,
                   child: _isLoadingProfile
-                      ? const CircularProgressIndicator()
+                      ? SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: colorScheme.primary,
+                          ),
+                        )
                       : Text(
                           _getInitials(),
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          style: textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onPrimaryContainer,
+                          ),
                         ),
                 ),
+
                 const SizedBox(width: 16),
+
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isLoadingProfile ? 'Loading...' : _profileData?['user_name'] ?? 'Unknown User',
-                        style: const TextStyle(
-                          fontSize: 24,
+                        _isLoadingProfile
+                            ? 'Loading...'
+                            : _profileData?['user_name'] ?? 'Unknown User',
+                        style: textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+
                       const SizedBox(height: 4),
+
                       Text(
-                        _isLoadingProfile ? 'Loading...' : '${_profileData?['first_name'] ?? ''} ${_profileData?['last_name'] ?? ''}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        _isLoadingProfile
+                            ? 'Loading...'
+                            : '${_profileData?['first_name'] ?? ''} '
+                                '${_profileData?['last_name'] ?? ''}',
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
+
                       const SizedBox(height: 4),
+
                       Text(
-                        _isLoadingProfile 
-                            ? '...' 
-                            : '${_profileData?['school'] ?? ''} • ${_profileData?['major'] ?? ''}, ${_profileData?['year_of_study'] ?? ''}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        _isLoadingProfile
+                            ? '...'
+                            : '${_profileData?['school'] ?? ''} '
+                                '• ${_profileData?['major'] ?? ''}, '
+                                '${_profileData?['year_of_study'] ?? ''}',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
+
+                      const SizedBox(height: 2),
+
                       Text(
-                        _isLoadingProfile ? '...' : _profileData?['email'] ?? '',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        _isLoadingProfile
+                            ? '...'
+                            : _profileData?['email'] ?? '',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -276,6 +315,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ],
             ),
           ),
+
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -845,86 +885,105 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
   Widget _buildSettingsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Deprecated profile settings, might change to a seperate screen in the future.
-        
-        // const Text(
-        //   'Profile Settings',
-        //   style: TextStyle(
-        //     fontSize: 20,
-        //     fontWeight: FontWeight.bold,
-        //   ),
-        // ),
-        // const SizedBox(height: 16),
-        // Card(
-        //   child: Padding(
-        //     padding: const EdgeInsets.all(16),
-        //     child: Column(
-        //       children: [
-        //         TextField(
-        //           decoration: const InputDecoration(labelText: 'Full Name'),
-        //           controller: _nameController,
-        //         ),
-        //         const SizedBox(height: 16),
-        //         TextField(
-        //           decoration: const InputDecoration(labelText: 'Major'),
-        //           controller: _majorController,
-        //         ),
-        //         const SizedBox(height: 16),
-        //         TextField(
-        //           decoration: const InputDecoration(labelText: 'Year of Study'),
-        //           controller: _yearController,
-        //         ),
-        //       ],
-        //     ),
-        //   ),
-        // ),
-
         const SizedBox(height: 24),
-        const Text(
+
+        Text(
           'App Preferences',
-          style: TextStyle(
-            fontSize: 20,
+          style: textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
+
         const SizedBox(height: 16),
+
         Card(
           child: Column(
             children: [
+              // Light and dark mode switch
+              AnimatedBuilder(
+                animation: widget.themeController,
+                builder: (context, child) {
+                  final bool isDarkMode =
+                      widget.themeController.themeMode == ThemeMode.dark;
+
+                  return SwitchListTile(
+                    secondary: Icon(
+                      isDarkMode
+                          ? Icons.dark_mode
+                          : Icons.light_mode,
+                    ),
+                    title: const Text('Dark Mode'),
+                    subtitle: Text(
+                      isDarkMode
+                          ? 'Dark appearance enabled'
+                          : 'Light appearance enabled',
+                    ),
+                    value: isDarkMode,
+                    onChanged: (bool enabled) {
+                      widget.themeController.setThemeMode(
+                        enabled
+                            ? ThemeMode.dark
+                            : ThemeMode.light,
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const Divider(height: 1),
+
               SwitchListTile(
                 title: const Text('Email Notifications'),
-                subtitle:
-                    const Text('Receive updates about events and communities'),
+                subtitle: const Text(
+                  'Receive updates about events and communities',
+                ),
                 value: true,
                 onChanged: (value) {},
               ),
+
               const Divider(height: 1),
+
               SwitchListTile(
                 title: const Text('Push Notifications'),
-                subtitle: const Text('Get real-time alerts on your device'),
+                subtitle: const Text(
+                  'Get real-time alerts on your device',
+                ),
                 value: true,
                 onChanged: (value) {},
               ),
+
               const Divider(height: 1),
+
               SwitchListTile(
                 title: const Text('Show Online Status'),
-                subtitle: const Text("Let friends see when you're active"),
+                subtitle: const Text(
+                  "Let friends see when you're active",
+                ),
                 value: false,
                 onChanged: (value) {},
               ),
             ],
           ),
         ),
+
         const SizedBox(height: 32),
+
         OutlinedButton.icon(
           onPressed: () => _confirmLogout(context),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.error,
-            side: BorderSide(color: Theme.of(context).colorScheme.error),
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            foregroundColor: colorScheme.error,
+            side: BorderSide(
+              color: colorScheme.error,
+            ),
+            padding: const EdgeInsets.symmetric(
+              vertical: 14,
+            ),
           ),
           icon: const Icon(Icons.logout),
           label: const Text(
@@ -932,11 +991,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             style: TextStyle(fontSize: 16),
           ),
         ),
+
         const SizedBox(height: 16),
       ],
     );
   }
-
 
   Future<void> _showNusModsImportDialog() async {
     _nusModsLinkController.clear();

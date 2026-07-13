@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/screens/main_screen.dart';
 import 'register_screen.dart';
+import 'package:plannus/theme_controller.dart';
 
 class LoginScreen extends StatefulWidget {
+  final ThemeController themeController;
   final SupabaseClient? supabaseClient;
 
   // Dependency injection of SupabaseClient for testing.
-  const LoginScreen({super.key, this.supabaseClient}); 
+  const LoginScreen({
+    super.key, 
+    this.supabaseClient, 
+    required this.themeController
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -51,7 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const MainScreen(),
+            builder: (context) => MainScreen(
+              themeController: widget.themeController,
+            ),
           ),
         );
       } else {
@@ -204,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const RegisterScreen(),
+                        builder: (context) => RegisterScreen(themeController: widget.themeController),
                       ),
                     );
                   },
