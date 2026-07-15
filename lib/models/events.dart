@@ -93,13 +93,13 @@ class Event {
   }
 
   static String _formatTimeRange(DateTime startTime, DateTime? endTime) {
-    final start = _formatTime(startTime);
+    final start = _formatTime(startTime.toLocal());
 
     if (endTime == null) {
       return start;
     }
 
-    final end = _formatTime(endTime);
+    final end = _formatTime(endTime.toLocal());
     return '$start - $end';
   }
 

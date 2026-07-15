@@ -1374,15 +1374,28 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     });
     // Send to Supabase
     try {
-      final startDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, startTime.hour, startTime.minute);
-      final endDateTime = DateTime(parsedDate.year, parsedDate.month, parsedDate.day, endTime.hour, endTime.minute);
+      final DateTime startDateTime = DateTime(
+        parsedDate.year, 
+        parsedDate.month, 
+        parsedDate.day, 
+        startTime.hour, 
+        startTime.minute
+      );
+
+      final DateTime endDateTime = DateTime(
+        parsedDate.year, 
+        parsedDate.month, 
+        parsedDate.day, 
+        endTime.hour, 
+        endTime.minute
+      );
 
       await _eventService.createEvent(
         communityId: widget.community.id,
         title: _eventTitleController.text.trim(),
         date: parsedDate,
-        startTime: startDateTime,
-        endTime: endDateTime,
+        startTime: startDateTime.toLocal(),
+        endTime: endDateTime.toLocal(),
         location: _eventLocationController.text.trim(),
         description: _eventDescriptionController.text.trim(),
         category: 'General',

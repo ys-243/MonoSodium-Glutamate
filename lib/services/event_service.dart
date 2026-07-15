@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/events.dart';
+import 'notif_service.dart';
 
 class EventService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -14,7 +15,9 @@ class EventService {
     required String description,
     required String category,
     required int capacity,
+
   }) async {
+
     final user = _supabase.auth.currentUser;
 
     if (user == null) {
@@ -27,8 +30,8 @@ class EventService {
           'community_id': communityId,
           'title': title,
           'date': date.toIso8601String(),
-          'start_time': startTime.toIso8601String(),
-          'end_time': endTime.toIso8601String(),
+          'start_time': startTime.toUtc().toIso8601String(),
+          'end_time': endTime.toUtc().toIso8601String(),
           'location': location,
           'description': description,
           'category': category,
@@ -210,6 +213,22 @@ class EventService {
       onConflict: 'event_id,user_id',
     );
 
+    final eventData = await _supabase
+        .from('events')
+        .select('title, start_time')
+        .eq('id', eventId)
+        .single();
+      
+    final String eventTitle = eventData['title'] as String;
+    final DateTime eventStartTime = DateTime.parse(eventData['start_time'] as String);
+
+    await NotificationService.instance.scheduleEventReminder(
+      eventId: eventId,
+      eventTitle: eventTitle,
+      eventStartTime: eventStartTime.toLocal(),
+      reminderBefore: const Duration(hours: 1),
+    );
+
     // check if user is a member of the community.
     final membership = await _supabase
         .from('community_members')
@@ -242,6 +261,8 @@ class EventService {
         .delete()
         .eq('event_id', eventId)
         .eq('user_id', currentUser.id);
+    
+    await NotificationService.instance.cancelEventReminder(eventId);
   }
 
   Future<List<Event>> fetchRegisteredEventsForCurrentUser() async {

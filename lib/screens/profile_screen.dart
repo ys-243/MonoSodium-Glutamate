@@ -6,6 +6,7 @@ import 'package:plannus/services/friend_service.dart';
 import 'package:plannus/screens/chat_screen.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:plannus/theme_controller.dart';
+import 'package:plannus/services/notif_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -40,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late final TextEditingController _manualStartTimeController;
   late final TextEditingController _manualEndTimeController;
   bool _isCreatingManualEvent = false;
+  bool _notifEnabled = false;
   String? _manualEventDialogError;
   
   // State variables to hold the user's profile data and loading state
@@ -950,12 +952,45 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               const Divider(height: 1),
 
               SwitchListTile(
-                title: const Text('Push Notifications'),
+                title: const Text('Notifications'),
                 subtitle: const Text(
-                  'Get real-time alerts on your device',
+                  'Receive reminders about upcoming events',
                 ),
-                value: true,
-                onChanged: (value) {},
+                value: _notifEnabled,
+                onChanged: (value) async {
+                  if (value) {
+                    final bool granted =
+                        await NotificationService.instance.requestPermissions();
+
+                    if (!mounted) return;
+
+                    setState(() {
+                      _notifEnabled = granted;
+                    });
+
+                    if (granted) {
+                      await NotificationService.instance.showTestNotification();
+                    } else {
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Notification permission was not granted.',
+                          ),
+                        ),
+                      );
+                    }
+                  } else {
+                    await NotificationService.instance.cancelAllNotifications();
+
+                    if (!mounted) return;
+
+                    setState(() {
+                      _notifEnabled = false;
+                    });
+                  }
+                },
               ),
 
               const Divider(height: 1),

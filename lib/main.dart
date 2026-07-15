@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:plannus/services/auth_service.dart';
 import 'package:plannus/theme_controller.dart';
+import 'package:plannus/services/notif_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,8 @@ Future<void> main() async {
     publishableKey: supabaseKey,
   );
   
+  await NotificationService.instance.initialize();
+
   runApp(
     ProviderScope(
       child: PlanNUSApp(
@@ -58,7 +61,7 @@ class PlanNUSApp extends StatelessWidget {
         return MaterialApp(
           title: 'PlanNUS',
           debugShowCheckedModeBanner: false,
-          
+
           // Light mode
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
