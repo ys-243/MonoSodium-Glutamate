@@ -488,6 +488,7 @@ class _EventsScreenState extends State<EventsScreen>
                       _selectedCommunityID = value;
                     });
                   },
+
                   itemBuilder: (context) {
                     // Start with the default 'All' option
                     List<PopupMenuItem<String>> items = [

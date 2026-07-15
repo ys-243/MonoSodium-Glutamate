@@ -139,6 +139,7 @@ class EventService {
         .from('events')
         .select('*, communities(name, level), profiles(first_name, last_name, user_name)')
         .inFilter('community_id', combinedCommunityIds)
+        .eq('is_archived', false)
         .order('start_time', ascending: true);
 
     // Fetch attendee counts and check if current user is registered
@@ -224,6 +225,7 @@ class EventService {
         .from('events')
         .select('title, start_time')
         .eq('id', eventId)
+        .eq('is_archived', false)
         .single();
       
     final String eventTitle = eventData['title'] as String;
@@ -298,6 +300,7 @@ class EventService {
         .from('events')
         .select('*, communities(name, level), profiles(first_name, last_name, user_name)')
         .inFilter('id', eventIds)
+        .eq('is_archived', false)
         .order('start_time', ascending: true);
 
     final allAttendeeRows = await _supabase

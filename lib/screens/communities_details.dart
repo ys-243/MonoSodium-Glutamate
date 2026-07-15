@@ -8,6 +8,10 @@ import 'package:plannus/models/post.dart';
 import 'package:plannus/services/post_service.dart';
 import 'package:plannus/screens/post_details.dart';
 
+enum _EventFilter {
+    upcoming,
+    past,
+}
 
 class CommunityDetailScreen extends StatefulWidget {
   final Community community;
@@ -41,6 +45,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   List<Event> _events = [];
   bool _isLoadingEvents = true;
   String? _eventsError;
+
+  // Selected events filter
+  _EventFilter _selectedEventFilter = _EventFilter.upcoming;
 
   // State variables for event creation dialog
   bool _isCreating = false;
@@ -782,6 +789,46 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     }
   }
 
+  List<Event> get _filteredEvents {
+    final now = DateTime.now();
+
+    // Remove the current time so filtering is based on the event date.
+    final today = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    );
+
+    final filteredEvents = _events.where((event) {
+      final eventDate = DateTime(
+        event.date.year,
+        event.date.month,
+        event.date.day,
+      );
+
+      switch (_selectedEventFilter) {
+        case _EventFilter.upcoming:
+          // Includes events happening today.
+          return !eventDate.isBefore(today);
+
+        case _EventFilter.past:
+          return eventDate.isBefore(today);
+      }
+    }).toList();
+
+    // Upcoming events: earliest first.
+    // Past events: most recent first.
+    filteredEvents.sort((firstEvent, secondEvent) {
+      if (_selectedEventFilter == _EventFilter.upcoming) {
+        return firstEvent.date.compareTo(secondEvent.date);
+      }
+
+      return secondEvent.date.compareTo(firstEvent.date);
+    });
+
+    return filteredEvents;
+  }
+
   Widget _buildEventsTab() {
     if (_isLoadingEvents) {
       return const Center(
@@ -821,26 +868,72 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
       );
     }
 
+    final filteredEvents = _filteredEvents;
+
     return RefreshIndicator(
       onRefresh: _loadEvents,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Community Events',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Community Events',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      _selectedEventFilter == _EventFilter.upcoming
+                          ? 'Showing upcoming events'
+                          : 'Showing past events',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+
+              // Filter button
+              PopupMenuButton<_EventFilter>(
+                initialValue: _selectedEventFilter,
+                tooltip: 'Filter events',
+                icon: const Icon(Icons.filter_alt_outlined),
+                onSelected: (selectedFilter) {
+                  setState(() {
+                    _selectedEventFilter = selectedFilter;
+                  });
+                },
+                itemBuilder: (context) {
+                  return [
+                    CheckedPopupMenuItem<_EventFilter>(
+                      value: _EventFilter.upcoming,
+                      checked:
+                          _selectedEventFilter == _EventFilter.upcoming,
+                      child: const Text('Upcoming events'),
+                    ),
+                    CheckedPopupMenuItem<_EventFilter>(
+                      value: _EventFilter.past,
+                      checked: _selectedEventFilter == _EventFilter.past,
+                      child: const Text('Past events'),
+                    ),
+                  ];
+                },
+              ),
+
+              const SizedBox(width: 8),
+
               FilledButton.icon(
                 onPressed: _showCreateEventDialog,
                 icon: const Icon(Icons.add),
@@ -848,17 +941,22 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               ),
             ],
           ),
+
           const SizedBox(height: 16),
 
-          if (_events.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(32),
+          if (filteredEvents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
               child: Center(
-                child: Text('No events yet.'),
+                child: Text(
+                  _selectedEventFilter == _EventFilter.upcoming
+                      ? 'No upcoming events.'
+                      : 'No past events.',
+                ),
               ),
             )
           else
-            ..._events.map(
+            ...filteredEvents.map(
               (event) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildEventCard(event),
