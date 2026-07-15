@@ -53,6 +53,13 @@ class EventService {
     );
   }
 
+  Future<void> deleteEvent(String eventId) async {
+    await _supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+  }
+  
   Future<List<Event>> fetchCommunityEvents(String communityId) async {
     final currentUser = _supabase.auth.currentUser;
 
@@ -228,7 +235,7 @@ class EventService {
       eventStartTime: eventStartTime.toLocal(),
       reminderBefore: const Duration(hours: 1),
     );
-
+      
     // check if user is a member of the community.
     final membership = await _supabase
         .from('community_members')
@@ -237,6 +244,7 @@ class EventService {
         .eq('user_id', currentUser.id)
         .maybeSingle();
     // If not, auto-join them as a member.
+
     if (membership == null) {
       await _supabase.from('community_members').insert({
         'community_id': communityId,

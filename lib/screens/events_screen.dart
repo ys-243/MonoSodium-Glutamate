@@ -90,8 +90,7 @@ class _EventsScreenState extends State<EventsScreen>
     });
 
     try {
-      // First check if the user is already a member of this community
-      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final userId = Supabase.instance.client.auth.currentUser!.id; // First check if the user is already a member of this community
 
       final membership = await Supabase.instance.client
           .from('community_members')
@@ -213,9 +212,13 @@ class _EventsScreenState extends State<EventsScreen>
 
   // show event details in a dialog when event card is tapped. 
   void _showEventDetailsDialog(Event event) {
+    final String? currentUserId =
+      Supabase.instance.client.auth.currentUser?.id;
+
+    final bool isCreator = currentUserId == event.createdBy;
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Text(event.title),
           content: SizedBox(
@@ -308,6 +311,70 @@ class _EventsScreenState extends State<EventsScreen>
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
+
+            if (isCreator)
+              TextButton(
+                onPressed: () async {
+                  final bool shouldDelete = await showDialog<bool>(
+                        context: dialogContext,
+                        builder: (confirmationContext) {
+                          return AlertDialog(
+                            title: const Text('Delete event?'),
+                            content: const Text(
+                              'This event will be permanently deleted.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(confirmationContext, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(confirmationContext, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          );
+                        },
+                      ) ??
+                      false;
+
+                  if (!shouldDelete) return;
+
+                  try {
+                    await EventService().deleteEvent(event.id);
+
+                    if (!mounted) return;
+
+                    Navigator.pop(dialogContext);
+                    await _loadEvents();
+
+                    if (!mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Event deleted successfully.'),
+                      ),
+                    );
+                  } catch (error) {
+                    if (!mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Unable to delete event: $error'),
+                      ),
+                    );
+                  }
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text('Delete'),
+              ),
           ],
         );
       },

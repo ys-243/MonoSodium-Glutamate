@@ -971,8 +971,32 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                         )
                       : FilledButton(
                           onPressed: () async {
-                            await _eventService.rsvpToEvent(event.id, event.communityId);
-                            await _loadEvents();
+                            try {
+                              await _eventService.rsvpToEvent(
+                                event.id,
+                                event.communityId,
+                              );
+
+                              if (!mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Registration successful. A reminder will be sent 1 hour before the event.',
+                                  ),
+                                ),
+                              );
+
+                              await _loadEvents();
+                            } catch (error) {
+                              if (!mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Registration failed: $error'),
+                                ),
+                              );
+                            }
                           },
 
                           style: FilledButton.styleFrom(

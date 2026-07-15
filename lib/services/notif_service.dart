@@ -68,33 +68,23 @@ class NotificationService {
   }
 
   Future<bool> requestPermissions() async {
-    bool androidGranted = true;
-    bool iosGranted = true;
-
     final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
         _notifications.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-
-    final bool? androidResult =
-        await androidPlugin?.requestNotificationsPermission();
-
-    if (androidResult != null) {
-      androidGranted = androidResult;
-    }
 
     final IOSFlutterLocalNotificationsPlugin? iosPlugin =
         _notifications.resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>();
 
-    final bool? iosResult = await iosPlugin?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final bool androidGranted =
+        await androidPlugin?.requestNotificationsPermission() ?? true;
 
-    if (iosResult != null) {
-      iosGranted = iosResult;
-    }
+    final bool iosGranted = await iosPlugin?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        ) ??
+        true;
 
     return androidGranted && iosGranted;
   }
