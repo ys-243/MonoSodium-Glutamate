@@ -11,8 +11,8 @@ android {
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_18
+        targetCompatibility = JavaVersion.VERSION_18
     }
 
     defaultConfig {
@@ -34,17 +34,21 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+    
+    kotlinOptions {
+        jvmTarget = "18"
+    }
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_18
     }
 }
 
-dependecies {
+dependencies {
     coreLibraryDesugaring(
-        "com.android.tools:desugaring_jdk_libs:2.1.4"
+        "com.android.tools:desugar_jdk_libs:2.1.4"
     )
 }
 

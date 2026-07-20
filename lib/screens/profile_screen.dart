@@ -1681,7 +1681,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     decoration: const InputDecoration(
                       labelText: 'Start Time',
                       hintText: 'HH:MM',
-                      suffixIcon: const Icon(Icons.access_time),
+                      suffixIcon: Icon(Icons.access_time),
                     ),
                     onTap: () async {
                       final TimeOfDay? pickedTime = await showTimePicker(
@@ -1703,7 +1703,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     decoration: const InputDecoration(
                       labelText: 'End Time',
                       hintText: 'HH:MM',
-                      suffixIcon: const Icon(Icons.access_time_filled),
+                      suffixIcon: Icon(Icons.access_time_filled),
                     ),
                     onTap: () async {
                       TimeOfDay initialEndTime = TimeOfDay.now();
