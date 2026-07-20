@@ -61,6 +61,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   List<Map<String, dynamic>> _pendingRequests = [];
   bool _isLoadingFriends = true;
   String _searchQuery = '';
+  RealtimeChannel? _presenceChannel; // Channel for tracking online status of friends
+  Set<String> _onlineUserIds = {};
+  bool _showOnlineStatus = true; // Default to true so they appear online
 
   @override
   void initState() {
@@ -83,6 +86,26 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _fetchProfileData();
     _fetchPersonalCalendarEvents();
     _fetchFriendsData();
+
+    // Set up presence channel for online status
+    _setupPresenceChannel();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _nameController.dispose();
+    _schoolController.dispose();
+    _majorController.dispose();
+    _yearController.dispose();
+    _nusModsLinkController.dispose();
+    _manualTitleController.dispose();
+    _manualVenueController.dispose();
+    _manualDateController.dispose();
+    _manualStartTimeController.dispose();
+    _manualEndTimeController.dispose();
+    _presenceChannel?.unsubscribe(); 
+    super.dispose();
   }
 
   // Fetch the user's profile data from Supabase and populate the state variables and controllers. 
@@ -182,6 +205,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       }
     }
   }
+
   // Function to get initials from the user's name for the avatar, used for the CircleAvatar in the Profile tab. If name not available, return '?'.
   String _getInitials() {
     if (_profileData == null) return '?';
@@ -197,20 +221,47 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return '?';
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _nameController.dispose();
-    _schoolController.dispose();
-    _majorController.dispose();
-    _yearController.dispose();
-    _nusModsLinkController.dispose();
-    _manualTitleController.dispose();
-    _manualVenueController.dispose();
-    _manualDateController.dispose();
-    _manualStartTimeController.dispose();
-    _manualEndTimeController.dispose();
-    super.dispose();
+  void _setupPresenceChannel() {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) return;
+
+    // Join a shared channel for online status
+    _presenceChannel = Supabase.instance.client.channel('online-users');
+
+    _presenceChannel!.onPresenceSync((_) {
+      final presenceState = _presenceChannel!.presenceState();
+      final onlineIds = <String>{};
+      
+      // Loop through all users currently connected to the channel
+      for (final presences in presenceState) {
+        // Cast to Iterable to prevent loop errors
+        for (final presence in (presences as Iterable)) {
+          
+          // Safely extract the data whether the SDK returns a Presence object or a raw Map
+          final dynamic p = presence;
+          final presenceData = p is Map ? p : p.payload;
+          
+          if (presenceData['user_id'] != null) {
+            onlineIds.add(presenceData['user_id'].toString());
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _onlineUserIds = onlineIds;
+        });
+      }
+    }).subscribe((status, [error]) async {
+      // Notice the [error] wrapped in brackets above!
+      
+      // Cast status to dynamic so the compiler doesn't complain about Enum vs String checks
+      final dynamic currentStatus = status;
+      
+      if ((currentStatus == RealtimeSubscribeStatus.subscribed || currentStatus == 'SUBSCRIBED') && _showOnlineStatus) {
+        await _presenceChannel!.track({'user_id': currentUser.id});
+      }
+    });
   }
 
   @override
@@ -443,11 +494,34 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             )
           else
             ...filteredFriends.map((friend) {
-              final name = friend['user_name'] ?? '${friend['first_name']} ${friend['last_name']}';
+              final name = friend['user_name'] ?? '${friend['first_name']} ${friend['last_name']}'; // Fallback to first/last name if username isn't set yet
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                  leading: Stack(
+                    children: [
+                      CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                       
+                      // Only show the green dot if this friend's ID is in the online set
+                      if (_onlineUserIds.contains(friend['id']))
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.surface, 
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text('${friend['major'] ?? 'Unknown'} • ${friend['year_of_study'] ?? ''}'),
                   trailing: IconButton(
@@ -886,6 +960,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
     );
   }
+
   Widget _buildSettingsTab() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -1000,8 +1075,23 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 subtitle: const Text(
                   "Let friends see when you're active",
                 ),
-                value: false,
-                onChanged: (value) {},
+                value: _showOnlineStatus, // Use the state variable
+                onChanged: (value) async {
+                  setState(() {
+                    _showOnlineStatus = value;
+                  });
+
+                  final currentUser = Supabase.instance.client.auth.currentUser;
+                  if (currentUser != null && _presenceChannel != null) {
+                    if (value) {
+                      // Broadcast that we are online
+                      await _presenceChannel!.track({'user_id': currentUser.id});
+                    } else {
+                      // Remove ourselves from the online pool
+                      await _presenceChannel!.untrack();
+                    }
+                  }
+                },
               ),
             ],
           ),
