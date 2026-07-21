@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:plannus/services/friend_service.dart';
@@ -47,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   // State variables to hold the user's profile data and loading state
   Map<String, dynamic>? _profileData;
   bool _isLoadingProfile = true;
+  bool _isUploading = false;
 
   // State variables for the calendar tab
   String _selectedAcadYear = '2026-2027'; // Default academic year for the calendar tab
@@ -54,6 +56,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   List<Map<String, dynamic>> _personalCalendarEvents = []; // List to hold personal calendar events fetched from Supabase
   bool _isLoadingCalendar = true;
   bool _isImportingNusMods = false;
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
   
   // State variables for the friends tab
   final FriendService _friendService = FriendService();
@@ -294,6 +298,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   radius: 40,
                   backgroundColor: colorScheme.primaryContainer,
                   foregroundColor: colorScheme.onPrimaryContainer,
+                  // Show the avatar image if available, otherwise show initials
+                  backgroundImage: (_profileData?['avatar_url'] != null && _profileData!['avatar_url'].isNotEmpty)
+                      ? NetworkImage(_profileData!['avatar_url'])
+                      : null,
                   child: _isLoadingProfile
                       ? SizedBox(
                           width: 28,
@@ -303,13 +311,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             color: colorScheme.primary,
                           ),
                         )
-                      : Text(
-                          _getInitials(),
-                          style: textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onPrimaryContainer,
-                          ),
-                        ),
+                      // Only show initials if there is NO avatar_url
+                      : (_profileData?['avatar_url'] != null && _profileData!['avatar_url'].isNotEmpty)
+                          ? null 
+                          : Text(
+                              _getInitials(),
+                              style: textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                            ),
                 ),
 
                 const SizedBox(width: 16),
@@ -453,7 +464,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 margin: const EdgeInsets.only(bottom: 8),
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: ListTile(
-                  leading: CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                  leading: CircleAvatar(
+                            backgroundImage: (request['avatar_url'] != null && request['avatar_url'].toString().isNotEmpty)
+                                ? NetworkImage(request['avatar_url'])
+                                : null,
+                            child: (request['avatar_url'] != null && request['avatar_url'].toString().isNotEmpty)
+                                ? null
+                                : Text(name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?'),
+                          ),
                   title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text('${request['major'] ?? 'Unknown'} • ${request['year_of_study'] ?? ''}'),
                   trailing: Row(
@@ -464,7 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         icon: const Icon(Icons.close, color: Colors.red),
                         onPressed: () async {
                           await _friendService.rejectFriendRequest(request['id']);
-                          _fetchFriendsData();
+                          _fetchFriendsData(); // refresh the list after rejecting
                         },
                       ),
                       // Accept Button
@@ -473,7 +491,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         style: IconButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.1)),
                         onPressed: () async {
                           await _friendService.acceptFriendRequest(request['id']);
-                          _fetchFriendsData();
+                          _fetchFriendsData(); // refresh the list after accepting
                         },
                       ),
                     ],
@@ -500,7 +518,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 child: ListTile(
                   leading: Stack(
                     children: [
-                      CircleAvatar(child: Text(name.substring(0, 1).toUpperCase())),
+                      CircleAvatar(
+                        backgroundImage: (friend['avatar_url'] != null && friend['avatar_url'].toString().isNotEmpty) 
+                            ? NetworkImage(friend['avatar_url'])
+                            : null,
+                        child: (friend['avatar_url'] != null && friend['avatar_url'].toString().isNotEmpty)
+                            ? null
+                            : Text(name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?'), // Fallback to initials if user doesn't have an avatar
+                      ),
                        
                       // Only show the green dot if this friend's ID is in the online set
                       if (_onlineUserIds.contains(friend['id']))
@@ -533,6 +558,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           builder: (context) => ChatScreen(
                             friendId: friend['id'],
                             friendName: name,
+                            friendAvatarUrl: friend['avatar_url'],
                           ),
                         ),
                       );
@@ -640,10 +666,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             contentPadding: EdgeInsets.zero,
                             leading: CircleAvatar(
                               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
-                              )
+                              backgroundImage: (user['avatar_url'] != null && user['avatar_url'].toString().isNotEmpty)
+                                  ? NetworkImage(user['avatar_url'])
+                                  : null,
+                              child: (user['avatar_url'] != null && user['avatar_url'].toString().isNotEmpty)
+                                  ? null
+                                  : Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                                    ),
                             ),
                             title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
                             subtitle: Text('${user['major'] ?? 'Unknown'} • ${user['year_of_study'] ?? ''}'),
@@ -691,8 +722,97 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  DateTime _focusedDay = DateTime.now();
-  DateTime _selectedDay = DateTime.now();
+  Future<void> _uploadProfilePicture() async {
+    final picker = ImagePicker();
+    // 1. Pick the image from the gallery
+    final XFile? imageFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 300, 
+      maxHeight: 300,
+    );
+
+    if (imageFile == null) return; // User canceled the picker
+
+    setState(() => _isUploading = true);
+
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final fileExt = imageFile.path.split('.').last;
+      
+      // 1. Generate a unique filename using the current timestamp and the file extension
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser!.id;
+      final newFilePath = '$userId/$fileName'; 
+      
+      // 2. Use maybeSingle() to prevent crashes if the user profile is completely empty
+      final currentProfile = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', userId)
+          .maybeSingle();
+          
+      final String? oldAvatarUrl = currentProfile?['avatar_url'];
+      
+      if (oldAvatarUrl != null && oldAvatarUrl.isNotEmpty) {
+        try {
+          final oldFilePath = oldAvatarUrl.split('/avatars/').last.split('?').first;
+          await supabase.storage
+              .from('avatars')
+              .remove([oldFilePath]);
+        } catch (e) {
+          debugPrint('Note: Could not delete old avatar: $e');
+        }
+      }
+
+      // 1. Upload the new image
+      await supabase.storage
+          .from('avatars')
+          .uploadBinary(newFilePath, bytes);
+
+      // 2. Get the base public URL
+      final baseUrl = supabase.storage
+          .from('avatars')
+          .getPublicUrl(newFilePath);
+
+      // Cache-Busting Timestamp
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final String newAvatarUrl = '$baseUrl?t=$timestamp';
+
+      // 3. Update the database
+      await supabase
+          .from('profiles')
+          .update({'avatar_url': newAvatarUrl})
+          .eq('id', userId);
+      
+      // Recreate the unmodifiable map before updating the local UI state
+      if (mounted) {
+        setState(() {
+          if (_profileData != null) {
+            _profileData = Map<String, dynamic>.from(_profileData!);
+            _profileData!['avatar_url'] = newAvatarUrl;
+          }
+          _isUploading = false;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture updated successfully!')),
+        );
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading image: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
 
   Widget _buildCalendarTab() {
     final selectedDayEvents = _getEventsForDay(_selectedDay);
@@ -1015,13 +1135,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
               const Divider(height: 1),
 
-              SwitchListTile(
-                title: const Text('Email Notifications'),
-                subtitle: const Text(
-                  'Receive updates about events and communities',
-                ),
-                value: true,
-                onChanged: (value) {},
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Change Profile Picture'),
+                subtitle: const Text('Upload a new avatar from your gallery'),
+                // Show a sleek loading spinner if currently uploading, otherwise show an arrow
+                trailing: _isUploading 
+                    ? const SizedBox(
+                        width: 24, 
+                        height: 24, 
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Icon(Icons.chevron_right),
+                // Disable the button while an upload is already in progress
+                onTap: _isUploading ? null : _uploadProfilePicture,
               ),
 
               const Divider(height: 1),

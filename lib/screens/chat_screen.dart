@@ -5,11 +5,13 @@ import 'package:plannus/services/chat_service.dart'; // Make sure this matches y
 class ChatScreen extends StatefulWidget {
   final String friendId;
   final String friendName;
+  final String? friendAvatarUrl; 
 
   const ChatScreen({
     super.key,
     required this.friendId,
     required this.friendName,
+    required this.friendAvatarUrl, 
   });
 
   @override
@@ -21,6 +23,53 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final String _currentUserId = Supabase.instance.client.auth.currentUser!.id;
 
+  bool _isFriendOnline = false;
+  RealtimeChannel? _presenceChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupPresenceChannel();
+  }
+  
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _presenceChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _setupPresenceChannel() {
+    _presenceChannel = Supabase.instance.client.channel('online-users');
+    
+    _presenceChannel!.onPresenceSync((_) {
+      final presenceState = _presenceChannel!.presenceState();
+      bool friendFound = false;
+
+      // Safely loop through the presence state to look for the friend's ID
+      for (var state in presenceState) {
+        final presenceList = state as List<dynamic>;
+        for (var presence in presenceList) {
+          if (presence['user_id'] == widget.friendId) {
+            friendFound = true;
+            break;
+          }
+        }
+        if (friendFound) break;
+      }
+
+      // Update the UI if the friend's status changes
+      if (mounted && _isFriendOnline != friendFound) {
+        setState(() {
+          _isFriendOnline = friendFound;
+        });
+      }
+
+    }).subscribe((status, [error]) async {
+      // standard subscribe handler
+    });
+  }
+  
   // Sends the message and instantly clears the text box after sending. 
   void _sendMessage() async {
     final text = _messageController.text.trim();
@@ -42,16 +91,101 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.friendName),
+        titleSpacing: 0, // Removes extra gap between the back button and the avatar
+        title: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            // TODO: Route to your friend's profile screen here!
+            // Example:
+            // Navigator.push(
+            //   context, 
+            //   MaterialPageRoute(
+            //     builder: (context) => ProfileScreen(userId: widget.friendId),
+            //   ),
+            // );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+            child: Row(
+              children: [
+                CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    // 1. Show the image if the URL exists
+                    backgroundImage: (widget.friendAvatarUrl != null && widget.friendAvatarUrl!.isNotEmpty)
+                        ? NetworkImage(widget.friendAvatarUrl!)
+                        : null,
+                    // 2. Only show the text initial if there is no image
+                    child: (widget.friendAvatarUrl != null && widget.friendAvatarUrl!.isNotEmpty)
+                        ? null
+                        : Text(
+                            widget.friendName.isNotEmpty ? widget.friendName[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.friendName,
+                        style: const TextStyle(
+                          fontSize: 16, 
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Row(
+                        children: [
+                          // Optional: A tiny dot next to the text for extra visual flair
+                          if (_isFriendOnline) ...[
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            _isFriendOnline ? 'Online' : 'Offline',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _isFriendOnline 
+                                  ? Colors.green 
+                                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: _isFriendOnline ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'View Profile',
+            onPressed: () {
+              // Same routing logic as the InkWell onTap above
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [

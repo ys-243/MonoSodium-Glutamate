@@ -56,8 +56,8 @@ class FriendService {
         .from('friendships')
         .select('''
           status,
-          requester:profiles!requester_id (id, first_name, last_name, user_name, major, year_of_study),
-          addressee:profiles!addressee_id (id, first_name, last_name, user_name, major, year_of_study)
+          requester:profiles!requester_id (id, first_name, last_name, user_name, major, year_of_study, avatar_url),
+          addressee:profiles!addressee_id (id, first_name, last_name, user_name, major, year_of_study, avatar_url)
         ''')
         .or('requester_id.eq.$currentUserId,addressee_id.eq.$currentUserId')
         .eq('status', 'accepted');
@@ -79,7 +79,7 @@ class FriendService {
     final response = await _supabase
         .from('friendships')
         .select('''
-          requester:profiles!requester_id (id, first_name, last_name, user_name, major, year_of_study)
+          requester:profiles!requester_id (id, first_name, last_name, user_name, major, year_of_study, avatar_url)
         ''')
         .eq('addressee_id', currentUserId)
         .eq('status', 'pending');
