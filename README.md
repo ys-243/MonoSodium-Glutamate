@@ -48,4 +48,4 @@ To run the app, download the .apk file from the ["Release"](https://github.com/y
         * Can maybe look to move/copy the Personal Calender to the home page, so that it does not look to baron and empty. ✅
     * Can look to use NUSMods API to import classes to fill up personal calender. ✅
     * Events should also show up here. ✅
-    * Settings feature should work. Push notifications etc. Can look to try to add notification settings to events (reminders).
+    * Settings feature should work. Push notifications etc. Can look to try to add notification settings to events (reminders). ✅

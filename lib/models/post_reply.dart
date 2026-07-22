@@ -2,6 +2,7 @@ class PostReply {
   final String id;
   final String postId;
   final String creatorName;
+  final String? creatorAvatarUrl;
   final String content;
   final DateTime createdAt;
 
@@ -9,6 +10,7 @@ class PostReply {
     required this.id,
     required this.postId,
     required this.creatorName,
+    this.creatorAvatarUrl,
     required this.content,
     required this.createdAt,
   });
@@ -27,6 +29,7 @@ class PostReply {
       id: map['id'],
       postId: map['post_id'],
       creatorName: name.isNotEmpty ? name : 'Unknown User',
+      creatorAvatarUrl: profile?['avatar_url'] as String?,
       content: map['content'],
       createdAt: DateTime.parse(map['created_at']).toLocal(),
     );

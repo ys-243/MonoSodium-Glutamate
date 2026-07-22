@@ -55,8 +55,10 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   // State variables for posts
   List<Post> _posts = [];
+  List<Map<String, dynamic>> _reportedPosts = [];
   bool _isLoadingPosts = true;
   bool _isPosting = false;
+  bool _isLoadingReports = true;
 
   // State variables for members
   List<Map<String, dynamic>> _members = [];
@@ -94,6 +96,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
     if (_canEdit) {
       _loadPendingRequests(); // Fetch the waitlist if they are an admin
+      _loadReports(); // Fetch reports of discussions if they are an admin
     }
   }
 
@@ -315,10 +318,15 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: Text(
-                  name[0].toUpperCase(),
-                  style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
-                ),
+                backgroundImage: (member['avatar_url'] != null && member['avatar_url'].toString().isNotEmpty)
+                    ? NetworkImage(member['avatar_url'])
+                    : null,
+                child: (member['avatar_url'] != null && member['avatar_url'].toString().isNotEmpty)
+                    ? null
+                    : Text(
+                        name[0].toUpperCase(),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                      ),
               ),
               title: Text(
                 name,
@@ -376,15 +384,20 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Widget _buildAdminTab() {
-    if (_isLoadingRequests) {
+    if (_isLoadingRequests || _isLoadingReports) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return RefreshIndicator(
-      onRefresh: _loadPendingRequests,
+      onRefresh: () async {
+        await _loadPendingRequests();
+        await _loadReports();
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+
+          // pending requests section
           const Text(
             'Pending Join Requests',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -392,11 +405,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           const SizedBox(height: 16),
           
           if (_pendingRequests.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('No pending requests at the moment.'),
-              ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 24),
+              child: Text('No pending requests at the moment.'),
             )
           else
             ..._pendingRequests.map((request) => Card(
@@ -404,30 +415,33 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Text(
-                    request['name'][0].toUpperCase(),
-                    style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
-                  ),
+                  backgroundImage: (request['avatar_url'] != null && request['avatar_url'].toString().isNotEmpty)
+                      ? NetworkImage(request['avatar_url'])
+                      : null,
+                  child: (request['avatar_url'] != null && request['avatar_url'].toString().isNotEmpty)
+                      ? null
+                      : Text(
+                          request['name'][0].toUpperCase(),
+                          style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+                        ),
                 ),
                 title: Text(request['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(request['email']),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // REJECT BUTTON
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.red),
                       tooltip: 'Reject',
                       onPressed: () async {
                         try {
                           await _communityService.rejectMember(widget.community.id, request['user_id']);
-                          _loadPendingRequests(); // Refresh list after action
+                          _loadPendingRequests();
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error rejecting: $e')));
                         }
                       },
                     ),
-                    // APPROVE BUTTON
                     IconButton(
                       icon: const Icon(Icons.check, color: Colors.green),
                       tooltip: 'Approve',
@@ -435,7 +449,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                       onPressed: () async {
                         try {
                           await _communityService.approveMember(widget.community.id, request['user_id']);
-                          _loadPendingRequests(); // Refresh list after action
+                          _loadPendingRequests();
+                          _loadMembers(); // Refresh the members tab too
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member approved!')));
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error approving: $e')));
@@ -446,12 +461,137 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 ),
               ),
             )),
+
+          const Divider(height: 48),
+
+          // reported posts section
+          const Text(
+            'Reported Posts',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red),
+          ),
+          const SizedBox(height: 16),
+
+          if (_reportedPosts.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 24),
+              child: Text('No posts have been reported.'),
+            )
+          else
+            ..._reportedPosts.map((report) {
+              final post = report['posts'];
+              final postCreator = post['profiles'];
+              
+              // Safely extract the creator's name
+              final userName = postCreator['user_name'] as String?;
+              final firstName = postCreator['first_name'] as String? ?? '';
+              final lastName = postCreator['last_name'] as String? ?? '';
+              final creatorName = (userName != null && userName.isNotEmpty)
+                  ? userName
+                  : '$firstName $lastName'.trim();
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  side: BorderSide(color: Colors.red.shade300, width: 1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias, 
+                child: InkWell( 
+                  onTap: () async {
+                    try {
+                      // Convert the raw map back into your Post model
+                      final postObject = Post.fromSupabase(post);
+                      
+                      // Navigate to the detail screen
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostDetailScreen(post: postObject),
+                        ),
+                      );
+                      
+                      // Refresh the reports list when they return
+                      _loadReports(); 
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error loading post: $e')),
+                      );
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Report Reason
+                        Row(
+                          children: [
+                            Icon(Icons.flag, color: Colors.red.shade700, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Reason: ${report['reason']}',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(),
+                        
+                        // Offending Post Preview
+                        Text('Posted by: $creatorName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text(post['title'] ?? 'Untitled', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(
+                          post['content'] ?? '',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Admin Actions
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Kick User Button
+                            TextButton.icon(
+                              onPressed: () => _confirmRemoveMember(post['user_id'], creatorName), 
+                              icon: const Icon(Icons.person_remove, size: 18),
+                              label: const Text('Kick User'),
+                              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+                            ),
+                            const Spacer(),
+                            // Dismiss Button
+                            TextButton(
+                              onPressed: () => _handleDismissReport(report['id']),  // dismiss marks as "resolved" without deleting the post.
+                              child: const Text('Dismiss'),
+                            ),
+                            const SizedBox(width: 8),
+                            // Delete Post Button
+                            FilledButton(
+                              onPressed: () => _handleDeleteReportedPost(post['id'], report['id']),
+                              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                              child: const Text('Delete Post'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
   Widget _buildPostCard(Post post) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isCreator = post.creatorId == currentUserId;
+
     return Card(
       clipBehavior: Clip.antiAlias, 
       child: InkWell(
@@ -469,7 +609,14 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
             children: [
               Row(
                 children: [
-                  CircleAvatar(child: Text(post.creatorName[0])),
+                  CircleAvatar(
+                    backgroundImage: (post.creatorAvatarUrl != null && post.creatorAvatarUrl!.isNotEmpty)
+                        ? NetworkImage(post.creatorAvatarUrl!)
+                        : null,
+                    child: (post.creatorAvatarUrl != null && post.creatorAvatarUrl!.isNotEmpty)
+                        ? null
+                        : Text(post.creatorName[0].toUpperCase()),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -482,6 +629,42 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                         ),
                       ],
                     ),
+                  ),
+                  // Report Button
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'report') {
+                        _showReportDialog(post);
+                      } else if (value == 'delete') {
+                        _confirmDeletePost(post);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      // Show Report only if they are NOT the creator
+                      if (!isCreator)
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Row(
+                            children: [
+                              Icon(Icons.flag, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Text('Report Post'),
+                            ],
+                          ),
+                        ),
+                      // Show Delete only if they ARE the creator
+                      if (isCreator)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Text('Delete Post'),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -503,6 +686,79 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showReportDialog(Post post) {
+    final TextEditingController reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Post'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(hintText: 'Why are you reporting this?'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (reasonController.text.isNotEmpty) {
+                try {
+                  await _postService.reportPost(post.id, widget.community.id, reasonController.text);
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post reported.')));
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeletePost(Post post) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Post'),
+        content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), // Cancel
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context); // Close the dialog first
+              try {
+                // Call the exact same method your Admin dashboard uses!
+                await _postService.deletePost(post.id);
+                _loadPosts(); // Refresh the feed
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Post deleted successfully.')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error deleting post: $e')),
+                );
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -566,6 +822,49 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load requests: $e')),
       );
+    }
+  }
+
+  // Load reported posts for admin users.
+  Future<void> _loadReports() async {
+    setState(() => _isLoadingReports = true);
+    try {
+      final reports = await _postService.fetchPendingReports(widget.community.id);
+      if (!mounted) return;
+      setState(() {
+        _reportedPosts = reports;
+        _isLoadingReports = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingReports = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load reports: $e')),
+      );
+    }
+  }
+
+  // Dismiss a report (marks as resolved without deleting the post)
+  Future<void> _handleDismissReport(String reportId) async {
+    try {
+      await _postService.resolveReport(reportId);
+      _loadReports(); // Refresh the list
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report dismissed.')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error dismissing report: $e')));
+    }
+  }
+
+  Future<void> _handleDeleteReportedPost(String postId, String reportId) async {
+    try {
+      // Because of ON DELETE CASCADE in the database, deleting the post 
+      // will also automatically delete the report linked to it!
+      await _postService.deletePost(postId);
+      _loadReports(); // Refresh the reports list
+      _loadPosts(); // Refresh the main discussions tab
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post deleted successfully.')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting post: $e')));
     }
   }
 

@@ -102,7 +102,8 @@ class CommunityService {
             first_name,
             last_name,
             user_name,
-            email
+            email,
+            avatar_url
           )
         ''')
         .eq('community_id', communityId)
@@ -124,6 +125,7 @@ class CommunityService {
         'user_id': row['user_id'],
         'name': displayName.isNotEmpty ? displayName : 'Unknown User',
         'email': profile['email'] ?? 'No email provided',
+        'avatar_url': profile['avatar_url'] ?? '',
       };
     }).toList();
   }
@@ -152,7 +154,8 @@ class CommunityService {
           profiles (
             first_name,
             last_name,
-            user_name
+            user_name,
+            avatar_url
           )
         ''')
         .eq('community_id', communityId)
@@ -176,6 +179,7 @@ class CommunityService {
         'user_id': row['user_id'],
         'name': displayName.isNotEmpty ? displayName : 'Unknown User',
         'role': role,
+        'avatar_url': profile['avatar_url'] ?? '',
       };
     }).toList();
   }

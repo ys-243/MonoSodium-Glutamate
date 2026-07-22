@@ -3,6 +3,7 @@ class Post {
   final String communityId;
   final String creatorId;
   final String creatorName;
+  final String? creatorAvatarUrl;
   final String title;
   final String content;
   final DateTime createdAt;
@@ -13,6 +14,7 @@ class Post {
     required this.communityId,
     required this.creatorId,
     required this.creatorName,
+    this.creatorAvatarUrl,
     required this.title,
     required this.content,
     required this.createdAt,
@@ -23,6 +25,7 @@ class Post {
     // Parse creator name
     final profile = map['profiles'] as Map<String, dynamic>?;
     String name = 'Unknown User';
+
     if (profile != null) {
       final userName = profile['user_name'] as String?;
       final firstName = profile['first_name'] as String? ?? '';
@@ -42,6 +45,7 @@ class Post {
       communityId: map['community_id'],
       creatorId: map['user_id'],
       creatorName: name.isNotEmpty ? name : 'Unknown User',
+      creatorAvatarUrl: profile?['avatar_url'] as String?,
       title: map['title'] ?? 'Untitled Post',
       content: map['content'],
       createdAt: DateTime.parse(map['created_at']).toLocal(),

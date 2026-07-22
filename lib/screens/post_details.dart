@@ -77,7 +77,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(child: Text(widget.post.creatorName[0])),
+                    CircleAvatar(
+                      backgroundImage: (widget.post.creatorAvatarUrl != null && widget.post.creatorAvatarUrl!.isNotEmpty)
+                          ? NetworkImage(widget.post.creatorAvatarUrl!)
+                          : null,
+                      child: (widget.post.creatorAvatarUrl != null && widget.post.creatorAvatarUrl!.isNotEmpty)
+                          ? null
+                          : Text(widget.post.creatorName[0].toUpperCase()),
+                    ),
                     const SizedBox(width: 12),
                     Text(widget.post.creatorName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
@@ -101,7 +108,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(radius: 16, child: Text(reply.creatorName[0])),
+                            CircleAvatar(
+                              backgroundImage: (widget.post.creatorAvatarUrl != null && widget.post.creatorAvatarUrl!.isNotEmpty)
+                                  ? NetworkImage(widget.post.creatorAvatarUrl!)
+                                  : null,
+                              child: (widget.post.creatorAvatarUrl != null && widget.post.creatorAvatarUrl!.isNotEmpty)
+                                  ? null
+                                  : Text(widget.post.creatorName[0].toUpperCase()),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
