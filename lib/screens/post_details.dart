@@ -66,7 +66,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Discussion')),
+      appBar: AppBar(
+        title: Text(
+          widget.post.title,
+          style: const TextStyle(
+            fontSize: 20, 
+            fontWeight: FontWeight.bold
+          )
+        )
+      ),
       body: Column(
         children: [
           Container(

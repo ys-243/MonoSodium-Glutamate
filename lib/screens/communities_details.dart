@@ -669,13 +669,15 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                 ],
               ),
               const SizedBox(height: 12),
-              
               Text(
                 post.title, 
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 16,
+                ),
               ),
-              const SizedBox(height: 8),
               
+              const SizedBox(height: 6),
               Text(post.content),
               const SizedBox(height: 12),
               OutlinedButton.icon(
