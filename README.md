@@ -36,12 +36,12 @@ To run the app, download the .apk file from the ["Release"](https://github.com/y
 1. Setup friends feature 
     * Suggested friends feature (extra point, can look to use AI?) ✅
     * Can look to add friends chat? ✅
-    * Online feature? Any profile circled in green means online. 
+    * Online feature? Any profile circled in green means online. ✅
 
 2. Discussions in Communities
     * Posts in discussions ✅
     * Screen for writing replies ✅ or posting pics ❌ (not yet), etc. 
-    * Report feature available for Discussions in open communties. Admin then can see report and deem what action is best (less impt)
+    * Report feature available for Discussions in open communties. Admin then can see report and deem what action is best (less impt) ✅
     
 3. Profiles Tab
     * Personal Calender should be like the one in events. Tutorials etc. ✅
